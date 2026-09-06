@@ -338,18 +338,49 @@ router.post(
       }
     }
 
-    const candidateUserId = request.application.candidate.userId;
-    for (const slot of slots) {
-      await prisma.availabilityWindow.create({
-        data: {
-          userId: candidateUserId,
-          startUtc: new Date(slot.startUtc),
-          endUtc: new Date(slot.endUtc),
-          kind: 'PREFERRED',
-          sourceTimezone: request.application.candidate.user?.timezone || 'UTC',
-          note: `Preferred slot for ${request.roundName}`,
-        },
-      });
+    const candidateUserId = request.application?.candidate?.userId;
+    if (candidateUserId) {
+      for (const slot of slots) {
+        const start = new Date(slot.startUtc);
+        const end = new Date(slot.endUtc);
+        const dur = end.getTime() - start.getTime();
+
+        const overlapping = await prisma.availabilityWindow.findMany({
+          where: {
+            userId: candidateUserId,
+            kind: { in: ['AVAILABLE', 'PREFERRED'] },
+            startUtc: { lt: end },
+            endUtc: { gt: start },
+          },
+        });
+
+        const hasLonger = overlapping.some(
+          (w) => new Date(w.endUtc).getTime() - new Date(w.startUtc).getTime() >= dur
+        );
+        if (hasLonger) {
+          continue;
+        }
+
+        const shorter = overlapping.filter(
+          (w) => new Date(w.endUtc).getTime() - new Date(w.startUtc).getTime() < dur
+        );
+        if (shorter.length > 0) {
+          await prisma.availabilityWindow.deleteMany({
+            where: { id: { in: shorter.map((s) => s.id) } },
+          });
+        }
+
+        await prisma.availabilityWindow.create({
+          data: {
+            userId: candidateUserId,
+            startUtc: start,
+            endUtc: end,
+            kind: 'PREFERRED',
+            sourceTimezone: request.application?.candidate?.user?.timezone || 'UTC',
+            note: `Preferred slot for ${request.roundName || 'interview'}`,
+          },
+        });
+      }
     }
 
     // These go in their own column. focusTopicsJson belongs to the adaptive

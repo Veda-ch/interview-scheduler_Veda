@@ -15,6 +15,49 @@ import {
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
+/**
+ * If two available slots overlap, filter out the shorter one.
+ * Blackout windows (UNAVAILABLE) are preserved.
+ */
+function filterNonRedundantWindows(rawWindows) {
+  if (!rawWindows || !rawWindows.length) return [];
+
+  const sorted = [...rawWindows].sort((a, b) => {
+    const aStart = new Date(a.startUtc).getTime();
+    const bStart = new Date(b.startUtc).getTime();
+    if (aStart !== bStart) return aStart - bStart;
+    const aDur = new Date(a.endUtc).getTime() - aStart;
+    const bDur = new Date(b.endUtc).getTime() - bStart;
+    return bDur - aDur;
+  });
+
+  return sorted.filter((w, idx) => {
+    if (w.kind === 'UNAVAILABLE') return true;
+
+    const wStart = new Date(w.startUtc).getTime();
+    const wEnd = new Date(w.endUtc).getTime();
+    const wDuration = wEnd - wStart;
+
+    const hasLongerOverlapping = sorted.some((other, otherIdx) => {
+      if (otherIdx === idx) return false;
+      if (other.kind === 'UNAVAILABLE') return false;
+
+      const oStart = new Date(other.startUtc).getTime();
+      const oEnd = new Date(other.endUtc).getTime();
+      const doesOverlap = wStart < oEnd && oStart < wEnd;
+      if (!doesOverlap) return false;
+
+      const oDuration = oEnd - oStart;
+      if (oDuration > wDuration) return true;
+      if (oDuration === wDuration && otherIdx < idx) return true;
+
+      return false;
+    });
+
+    return !hasLongerOverlapping;
+  });
+}
+
 export default function AvailabilityPicker() {
   const { user } = useAuth();
   const [windows, setWindows] = useState([]);
@@ -31,6 +74,8 @@ export default function AvailabilityPicker() {
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('14:00');
   const [kind, setKind] = useState('AVAILABLE');
+
+  const displayedWindows = filterNonRedundantWindows(windows);
 
   useEffect(() => {
     loadAvailability();
@@ -55,16 +100,62 @@ export default function AvailabilityPicker() {
     setSuccess(null);
 
     try {
-      const startUtc = DateTime.fromISO(`${date}T${startTime}`, {
+      const startDt = DateTime.fromISO(`${date}T${startTime}`, {
         zone: user?.timezone || 'UTC',
-      })
-        .toUTC()
-        .toISO();
-      const endUtc = DateTime.fromISO(`${date}T${endTime}`, {
+      });
+      const endDt = DateTime.fromISO(`${date}T${endTime}`, {
         zone: user?.timezone || 'UTC',
-      })
-        .toUTC()
-        .toISO();
+      });
+
+      if (endDt <= startDt) {
+        setError('End time must be after start time.');
+        setSaving(false);
+        return;
+      }
+
+      const startUtc = startDt.toUTC().toISO();
+      const endUtc = endDt.toUTC().toISO();
+      const newStartMs = startDt.toMillis();
+      const newEndMs = endDt.toMillis();
+      const newDur = newEndMs - newStartMs;
+
+      // If adding an available/preferred slot, check against existing windows
+      if (kind !== 'UNAVAILABLE') {
+        const overlapping = windows.filter((w) => {
+          if (w.kind === 'UNAVAILABLE') return false;
+          const wStart = new Date(w.startUtc).getTime();
+          const wEnd = new Date(w.endUtc).getTime();
+          return newStartMs < wEnd && wStart < newEndMs;
+        });
+
+        // 1. If an existing overlapping slot is longer or equal, no need to show/add shorter slot
+        const longerExisting = overlapping.find((w) => {
+          const wDur = new Date(w.endUtc).getTime() - new Date(w.startUtc).getTime();
+          return wDur >= newDur;
+        });
+
+        if (longerExisting) {
+          const existingStart = DateTime.fromISO(longerExisting.startUtc, { zone: user?.timezone || 'UTC' }).toFormat('hh:mm a');
+          const existingEnd = DateTime.fromISO(longerExisting.endUtc, { zone: user?.timezone || 'UTC' }).toFormat('hh:mm a');
+          setSuccess(
+            `A longer overlapping available slot (${existingStart} – ${existingEnd}) already covers this time. Shorter slot omitted.`
+          );
+          setSaving(false);
+          return;
+        }
+
+        // 2. If newly entered slot is longer than existing overlapping slots, remove the shorter ones
+        const shorterExisting = overlapping.filter((w) => {
+          const wDur = new Date(w.endUtc).getTime() - new Date(w.startUtc).getTime();
+          return wDur < newDur;
+        });
+
+        if (shorterExisting.length > 0) {
+          await Promise.all(
+            shorterExisting.map((w) => api.del(`/candidates/me/availability/${w.id}`).catch(() => {}))
+          );
+        }
+      }
 
       await api.post('/candidates/me/availability', {
         windows: [{ startUtc, endUtc, kind, timezone: user?.timezone || 'UTC' }],
@@ -148,15 +239,15 @@ export default function AvailabilityPicker() {
 
           <div className="card p-5 bg-white border border-sky-100 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
-                <Sparkles className="h-4 w-4" />
+              <div className="p-2 rounded-lg bg-brand-100 text-brand-700">
+                <Clock className="h-4 w-4" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  Natural Language Availability (AI)
+                  Describe Your Availability
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Type your schedule in plain English
+                  Type your free hours or preferred days in plain language
                 </p>
               </div>
             </div>
@@ -173,24 +264,24 @@ export default function AvailabilityPicker() {
 
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400">
-                  Parsed into strict UTC windows
+                  Converted into structured time slots
                 </span>
                 <button
                   type="submit"
                   disabled={parsingNlp}
                   className="btn-primary text-xs py-2 px-4 shadow-xs flex items-center gap-1.5"
                 >
-                  <Sparkles className={`h-3.5 w-3.5 ${parsingNlp ? 'animate-spin' : ''}`} />
-                  {parsingNlp ? 'Parsing Schedule...' : 'Parse with AI & Apply'}
+                  <Clock className={`h-3.5 w-3.5 ${parsingNlp ? 'animate-spin' : ''}`} />
+                  {parsingNlp ? 'Applying Schedule...' : 'Apply Schedule'}
                 </button>
               </div>
             </form>
 
-            {/* AI Parsing Feedback */}
+            {/* Schedule Parsing Feedback */}
             {nlpResult && (
-              <div className="mt-4 p-3.5 rounded-xl bg-purple-50/70 border border-purple-100 text-xs text-purple-900 animate-fade-in">
-                <span className="font-bold block mb-1">AI Constraints Detected:</span>
-                <div className="space-y-1 text-[11px] text-purple-800">
+              <div className="mt-4 p-3.5 rounded-xl bg-brand-50/70 border border-brand-100 text-xs text-brand-900 animate-fade-in">
+                <span className="font-bold block mb-1">Schedule Preferences Detected:</span>
+                <div className="space-y-1 text-[11px] text-brand-800">
                   <div>• Active Days: {nlpResult.constraints?.days?.join(', ') || 'Weekdays'}</div>
                   <div>• Daily Window: {nlpResult.constraints?.start_time} to {nlpResult.constraints?.end_time}</div>
                   {nlpResult.constraints?.avoid_days?.length > 0 && (
@@ -278,16 +369,16 @@ export default function AvailabilityPicker() {
                   Active slots considered by the scheduler
                 </p>
               </div>
-              <span className="chip chip-blue">{windows.length} slots active</span>
+              <span className="chip chip-blue">{displayedWindows.length} slots active</span>
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100 pr-1 max-h-[500px]">
-              {windows.length === 0 ? (
+              {displayedWindows.length === 0 ? (
                 <div className="text-center py-16 text-xs text-slate-400">
                   No declared availability windows yet. Add some on the left!
                 </div>
               ) : (
-                windows.map((w) => {
+                displayedWindows.map((w) => {
                   // Render in the candidate's chosen zone, not the browser's.
                   const start = DateTime.fromISO(w.startUtc, { zone: user?.timezone || 'UTC' });
                   const end = DateTime.fromISO(w.endUtc, { zone: user?.timezone || 'UTC' });

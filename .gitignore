@@ -5,6 +5,8 @@ build/
 .env.local
 *.log
 .venv/
+.venv*/
+.venv39/
 __pycache__/
 *.pyc
 .pytest_cache/

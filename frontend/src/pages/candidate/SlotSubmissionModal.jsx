@@ -65,8 +65,8 @@ export default function SlotSubmissionModal({ isOpen, request, onClose, onSucces
         const startDt = DateTime.fromISO(`${s.date}T${s.startTime}`, { zone: candidateTz });
         const endDt = startDt.plus({ minutes: Number(s.durationMinutes) });
         return {
-          startUtc: startDt.toUTC().toISOString(),
-          endUtc: endDt.toUTC().toISOString(),
+          startUtc: startDt.toUTC().toISO(),
+          endUtc: endDt.toUTC().toISO(),
         };
       });
 

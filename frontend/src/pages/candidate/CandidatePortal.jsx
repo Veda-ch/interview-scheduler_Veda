@@ -74,12 +74,18 @@ export default function CandidatePortal() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => navigate('/candidate/profile')}
+              className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-xs"
+            >
+              <User className="h-4 w-4 text-brand-600" /> Edit Profile & Skills
+            </button>
             <button
               onClick={() => navigate('/calendar')}
-              className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+              className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-xs"
             >
-              <Calendar className="h-4 w-4 text-brand-600" /> View My Calendar
+              <Calendar className="h-4 w-4 text-emerald-600" /> View My Calendar
             </button>
             {requests.length > 0 && (
               <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 border border-amber-200">
@@ -94,8 +100,8 @@ export default function CandidatePortal() {
       {requests.length > 0 && (
         <div className="card p-6 bg-white border border-sky-100 shadow-sm mb-8">
           <h2 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-amber-600" />
-            Interview Requests Created by Recruiter ({requests.length})
+            <Calendar className="h-5 w-5 text-brand-600" />
+            Pending Interview Requests ({requests.length})
           </h2>
 
           <div className="space-y-4">
