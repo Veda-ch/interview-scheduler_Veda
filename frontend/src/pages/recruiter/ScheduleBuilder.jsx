@@ -132,32 +132,32 @@ export default function ScheduleBuilder() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-      {/* Top Bar: Selector & Meta Header */}
-      <div className="card p-5 bg-white border border-sky-100 shadow-sm mb-6">
+      {/* Top Banner */}
+      <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 text-white shadow-md shadow-brand-500/20">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">
-                Automated Schedule Optimizer & Builder
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-800 bg-purple-100/70 px-2.5 py-0.5 rounded-full border border-purple-200">
+                Automated Scheduling Hub
+              </span>
+              <h1 className="text-2xl font-extrabold text-slate-900 mt-1">
+                Schedule Builder
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                OR-Tools CP-SAT solver over slots that already satisfy every hard constraint
-              </p>
             </div>
           </div>
 
           {/* Request Selector Dropdown */}
           <div className="flex items-center gap-3 w-full lg:w-auto">
             <label className="text-xs font-bold uppercase text-slate-500 shrink-0">
-              Active Request:
+              Select Request:
             </label>
             <select
               value={selectedRequestId}
               onChange={(e) => setSelectedRequestId(e.target.value)}
-              className="input text-xs font-semibold py-2 cursor-pointer max-w-sm"
+              className="input text-xs font-semibold py-2 cursor-pointer max-w-sm border-slate-200 text-slate-900"
             >
               {requests.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -170,26 +170,26 @@ export default function ScheduleBuilder() {
 
         {/* Selected Request Snapshot Badge Bar */}
         {request && (
-          <div className="mt-4 pt-4 border-t border-sky-50 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="p-2.5 rounded-lg bg-sky-50/60 border border-sky-100/70">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Candidate</span>
-              <span className="font-bold text-slate-900">{request.candidate?.name || 'Rahul Mehta'}</span>
+          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Candidate</span>
+              <span className="font-bold text-slate-900">{request.candidate?.name || 'Candidate'}</span>
               <span className="text-[10px] text-slate-500 block">
                 Zone: {request.candidate?.timezone || 'Asia/Kolkata (IST)'}
               </span>
             </div>
-            <div className="p-2.5 rounded-lg bg-sky-50/60 border border-sky-100/70">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Round & Role</span>
+            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Round & Role</span>
               <span className="font-bold text-slate-900">{request.roundName}</span>
-              <span className="text-[10px] text-brand-700 font-semibold block">{request.interviewType}</span>
+              <span className="text-[10px] text-slate-500 font-medium block">{request.interviewType}</span>
             </div>
-            <div className="p-2.5 rounded-lg bg-sky-50/60 border border-sky-100/70">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Duration & Buffer</span>
+            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Duration & Buffer</span>
               <span className="font-bold text-slate-900">{request.durationMinutes} min</span>
               <span className="text-[10px] text-slate-500 block">+{request.bufferMinutes}m buffer window</span>
             </div>
-            <div className="p-2.5 rounded-lg bg-sky-50/60 border border-sky-100/70">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Round Status</span>
+            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Round Status</span>
               <span className="font-bold text-slate-900">{request.status}</span>
               <span className="text-[10px] text-slate-500 block">
                 Priority: {request.priority || 'NORMAL'}
@@ -201,28 +201,28 @@ export default function ScheduleBuilder() {
 
       {/* Success Notification Alert */}
       {successBooking && (
-        <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3 shadow-xs animate-fade-in">
+        <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-3 shadow-xs animate-fade-in">
           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
           <div className="flex-1">
             <h4 className="text-sm font-bold text-emerald-900">
-              Interview Confirmed & Double-Booking Guard Verified!
+              Interview Successfully Scheduled!
             </h4>
-            <p className="text-xs text-emerald-700 mt-0.5 leading-relaxed">
-              Hard calendar reservation created in UTC. Virtual meeting room (Jitsi/Google Meet) has been generated and notifications have been dispatched to the candidate and panel.
+            <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed font-medium">
+              Calendar reservations created, video meeting link generated, and invites dispatched to the candidate and panel.
             </p>
             <div className="mt-2 flex items-center gap-3">
               <button
                 onClick={() => navigate('/calendar')}
-                className="btn-success text-xs py-1 px-3"
+                className="btn-primary text-xs py-1.5 px-3 font-bold"
               >
                 View on Calendar
               </button>
               {successBooking.meeting?.joinUrl && (
                 <a
                   href={`/meeting/${successBooking.id}`}
-                  className="text-xs font-semibold text-emerald-800 underline hover:text-emerald-900 flex items-center gap-1"
+                  className="text-xs font-bold text-purple-700 underline hover:text-purple-900 flex items-center gap-1"
                 >
-                  <Video className="h-3.5 w-3.5" /> Open Join Room
+                  <Video className="h-3.5 w-3.5 text-purple-600" /> Open Join Room
                 </a>
               )}
             </div>
@@ -232,11 +232,11 @@ export default function ScheduleBuilder() {
 
       {/* Error Alert */}
       {error && (
-        <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3 shadow-xs animate-fade-in">
+        <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3 shadow-xs animate-fade-in">
           <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-rose-900">Scheduling Note / Constraint Clash</h4>
-            <p className="text-xs text-rose-700 mt-0.5">{error}</p>
+            <h4 className="text-sm font-bold text-rose-900">Unable to Find Open Time Slot</h4>
+            <p className="text-xs text-rose-800 mt-0.5 font-medium">{error}</p>
           </div>
         </div>
       )}
@@ -246,17 +246,14 @@ export default function ScheduleBuilder() {
         {/* Left Column: Eligible Interviewers (Intelligent Matching) (4 Cols) */}
         <div className="lg:col-span-4 space-y-4">
           <div className="card p-5 bg-white border border-sky-100 shadow-sm">
-            <div className="flex items-center justify-between pb-3 border-b border-sky-50">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                  <Users className="h-4 w-4 text-brand-600" />
+                  <Users className="h-4 w-4 text-purple-600" />
                   Eligible Interviewers
                 </h3>
-                <p className="text-[11px] text-slate-500">
-                  Ranked by skill coverage &amp; workload
-                </p>
               </div>
-              <span className="text-xs font-bold text-brand-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
+              <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
                 {matchData?.ranked?.length || 0} matched
               </span>
             </div>
@@ -264,7 +261,7 @@ export default function ScheduleBuilder() {
             {/* Matched Interviewers List */}
             <div className="mt-3 divide-y divide-slate-100">
               {!matchData?.ranked || matchData.ranked.length === 0 ? (
-                <div className="text-center py-8 text-xs text-slate-400">
+                <div className="text-center py-8 text-xs text-slate-400 font-medium">
                   Loading matched panelists...
                 </div>
               ) : (
@@ -272,39 +269,25 @@ export default function ScheduleBuilder() {
                   <div key={iv.interviewerId || idx} className="py-3 first:pt-1 last:pb-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-sky-100 text-brand-700 flex items-center justify-center font-extrabold text-xs shrink-0">
+                        <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                           {iv.name?.charAt(0) || 'I'}
                         </div>
                         <div>
                           <span className="font-bold text-xs text-slate-900 block">{iv.name}</span>
-                          <span className="text-[10px] text-slate-400 block">
-                            {iv.title || 'Engineer'} • {iv.seniority || 'MID'}
+                          <span className="text-[10px] text-slate-500 block font-medium">
+                            {iv.role} • Level {iv.level || 'L4'}
                           </span>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="inline-flex items-center gap-0.5 text-xs font-extrabold text-brand-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">
-                          <Award className="h-3 w-3 text-brand-600" />
-                          {Math.round(iv.matchScore || 85)}%
-                        </span>
-                        <span className="text-[9px] text-slate-400 block mt-0.5">
-                          {iv.timezone || 'UTC'}
-                        </span>
-                      </div>
+                      <span className="chip chip-purple text-[11px]">
+                        {Math.round((iv.fitScore || 0.85) * 100)}% fit
+                      </span>
                     </div>
 
-                    {/* Skill Alignment Highlights */}
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {(iv.skills || []).slice(0, 3).map((s, sIdx) => (
-                        <span
-                          key={sIdx}
-                          className="text-[9px] font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded"
-                        >
-                          {s.skill?.name || s.name || s}
-                        </span>
-                      ))}
-                      <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100 font-medium">
-                        Headroom: {iv.workload?.upcomingCount || 1}/{iv.workload?.maxPerWeek || 10}
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                      <span>Workload: {iv.weeklyLoad || 0}/{iv.maxPerWeek || 10} this week</span>
+                      <span className="text-[10px] font-semibold text-slate-700">
+                        {iv.matchedSkills?.length || 0} skills matched
                       </span>
                     </div>
                   </div>
@@ -317,40 +300,37 @@ export default function ScheduleBuilder() {
         {/* Right Column: solver proposals (8 Cols) */}
         <div className="lg:col-span-8 space-y-4">
           <div className="card p-5 bg-white border border-sky-100 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-sky-50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Zap className="h-5 w-5 text-purple-600" />
-                  Optimal Time Slots & Panel Selection
+                  Suggested Interview Times
                 </h3>
-                <p className="text-xs text-slate-500">
-                  Solves hard feasibility first, then maximizes multi-criteria weighted soft objective
-                </p>
               </div>
 
               {/* Action Button: Solve */}
               <button
                 onClick={handleSolve}
                 disabled={solving}
-                className="btn-primary text-xs py-2.5 px-4 shadow-md shadow-brand-500/25 flex items-center gap-2 shrink-0"
+                className="btn-primary text-xs py-2.5 px-4 flex items-center gap-2 shrink-0 font-bold"
               >
                 <Sparkles className={`h-4 w-4 ${solving ? 'animate-spin' : ''}`} />
-                {solving ? 'Ranking availabilities...' : 'Rank Availabilities'}
+                {solving ? 'Finding available times...' : 'Find Available Times'}
               </button>
             </div>
 
             {/* Proposals List */}
             <div className="mt-5 space-y-4">
               {proposals.length === 0 && !solving && (
-                <div className="text-center py-16 px-4 bg-sky-50/40 rounded-2xl border border-dashed border-sky-200">
-                  <div className="mx-auto w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-brand-600 mb-3 border border-sky-100">
+                <div className="text-center py-16 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                  <div className="mx-auto w-12 h-12 rounded-2xl bg-white shadow-xs flex items-center justify-center text-purple-600 mb-3 border border-slate-200">
                     <Sparkles className="h-6 w-6" />
                   </div>
-                  <h4 className="text-sm font-bold text-slate-800">
+                  <h4 className="text-sm font-bold text-slate-900">
                     No active proposals generated yet
                   </h4>
                   <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
-                    Click <strong>"Rank Availabilities"</strong> above to intersect candidate and panel availability, apply buffer and workload constraints, and rank the feasible slots with the CP-SAT solver.
+                    Click <strong>"Find Available Times"</strong> above to check candidate and panel availability, apply buffers, and find the best meeting times.
                   </p>
                 </div>
               )}
@@ -367,35 +347,34 @@ export default function ScheduleBuilder() {
                     key={prop.id || idx}
                     className={`p-4 rounded-2xl border transition duration-200 ${
                       isRank1
-                        ? 'border-brand-300 bg-gradient-to-r from-sky-50/80 via-white to-sky-50/40 shadow-sm'
-                        : 'border-sky-100 bg-white hover:border-sky-200 shadow-xs'
+                        ? 'border-purple-200 bg-purple-50/30 shadow-xs'
+                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-2xs'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2">
                         {isRank1 ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-extrabold uppercase px-2.5 py-1 rounded-lg bg-brand-600 text-white shadow-xs">
-                            <Sparkles className="h-3.5 w-3.5" /> Rank #1 • Recommended
+                          <span className="inline-flex items-center gap-1 text-xs font-bold uppercase px-2.5 py-1 rounded-xl bg-purple-600 text-white shadow-xs">
+                            <Sparkles className="h-3.5 w-3.5" /> Best Match • Recommended
                           </span>
                         ) : (
-                          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                          <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200">
                             Alternative #{prop.rank || idx + 1}
                           </span>
                         )}
 
-                        <span className="text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">
-                          Score: {Math.round(prop.score || 88)}%
+                        <span className="chip chip-purple">
+                          Match Score: {Math.round(prop.score || 88)}%
                         </span>
-
                       </div>
 
                       {/* Confirm & Book CTA */}
                       <button
                         onClick={() => handleConfirm(prop.id)}
                         disabled={confirmingId === prop.id}
-                        className={`text-xs py-2 px-4 font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm ${
+                        className={`text-xs py-2 px-4 font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs ${
                           isRank1
-                            ? 'btn-primary shadow-brand-500/25'
+                            ? 'btn-primary'
                             : 'btn-secondary'
                         }`}
                       >
@@ -405,29 +384,29 @@ export default function ScheduleBuilder() {
                     </div>
 
                     {/* Time Slot Details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-white border border-sky-100 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-white border border-slate-200 text-xs">
                       <div>
-                        <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                          Recruiter Wall-Clock Time
+                        <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                          Your Local Time
                         </span>
                         <div className="font-bold text-slate-900 text-sm mt-0.5 flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4 text-brand-600 shrink-0" />
+                          <Calendar className="h-4 w-4 text-purple-600 shrink-0" />
                           <span>{start.toFormat('ccc, LLL dd, yyyy')}</span>
                         </div>
-                        <span className="text-slate-600 font-medium text-xs">
+                        <span className="text-slate-500 font-medium text-xs">
                           {start.toFormat('hh:mm a')} – {end.toFormat('hh:mm a')} (Local)
                         </span>
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                          Candidate Timezone ({candidateZone})
+                        <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                          Candidate's Local Time ({candidateZone})
                         </span>
                         <div className="font-bold text-slate-900 text-sm mt-0.5 flex items-center gap-1.5">
-                          <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <Clock className="h-4 w-4 text-purple-600 shrink-0" />
                           <span>{startInCandZone.toFormat('ccc, LLL dd')}</span>
                         </div>
-                        <span className="text-slate-600 font-medium text-xs">
+                        <span className="text-slate-500 font-medium text-xs">
                           {startInCandZone.toFormat('hh:mm a')} – {end.setZone(candidateZone).toFormat('hh:mm a')}
                         </span>
                       </div>
@@ -436,29 +415,29 @@ export default function ScheduleBuilder() {
                     {/* Assigned Panelists for this Slot */}
                     <div className="mt-3 flex items-center justify-between flex-wrap gap-2 text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-400">Assigned Panel:</span>
+                        <span className="text-[11px] font-bold text-slate-500">Assigned Panel:</span>
                         {(prop.interviewers || []).map((i, iIdx) => (
                           <span
                             key={iIdx}
-                            className="font-semibold text-slate-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md"
+                            className="font-medium text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full text-xs"
                           >
                             {i.name || 'Panelist'}
                           </span>
                         ))}
                       </div>
 
-                      <span className="text-[11px] text-slate-400 font-medium">
-                        Engine: {prop.engineUsed || engineUsed}
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        Conflict-free verified
                       </span>
                     </div>
 
                     {/* Reasons / Explanations from Solver */}
                     {prop.reasons && prop.reasons.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-sky-50 flex flex-wrap gap-1.5">
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-1.5">
                         {prop.reasons.map((r, rIdx) => (
                           <span
                             key={rIdx}
-                            className="text-[10px] font-medium text-slate-600 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-200"
+                            className="text-[10px] font-medium text-slate-600 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200"
                           >
                             • {r}
                           </span>

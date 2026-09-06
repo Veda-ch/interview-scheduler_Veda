@@ -81,65 +81,62 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-sky-100 bg-white/90 backdrop-blur-md shadow-xs">
+      <header className="sticky top-0 z-40 border-b border-sky-100 bg-white/95 backdrop-blur-md shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between gap-4">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-600 to-sky-500 text-white shadow-md shadow-brand-500/20">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/20">
                 <Compass className="h-6 w-6 animate-pulse" />
               </div>
               <div>
                 <span className="font-extrabold text-base tracking-tight text-slate-900 flex items-center gap-1.5">
-                  Interview Control Tower
-                  <span className="text-[10px] uppercase font-bold tracking-widest bg-sky-100 text-brand-700 px-1.5 py-0.5 rounded-md border border-sky-200">
-                    v1.0
+                  Slotify
+                  <span className="text-[10px] uppercase font-extrabold tracking-wider bg-purple-100/80 text-purple-800 px-2 py-0.5 rounded-full border border-purple-200">
+                    Recruiter
                   </span>
                 </span>
-                <p className="text-[11px] font-medium text-slate-500 hidden sm:block">
-                  Constraint Scheduling & Self-Healing Control Tower
-                </p>
               </div>
             </div>
 
             {/* Navigation Tabs based on role */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden md:flex items-center">
               {user?.role === 'RECRUITER' && (
-                <>
+                <div className="bg-slate-100/80 p-1 rounded-2xl border border-slate-200/80 backdrop-blur-xs flex items-center gap-1 shadow-2xs">
                   <NavLink
                     to="/"
                     end
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-sky-100 text-brand-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
-                    <Layers className="h-4 w-4 text-sky-600" />
-                    Pipeline & Requests
+                    <Layers className="h-4 w-4 text-purple-600" />
+                    Dashboard
                   </NavLink>
                   <NavLink
                     to="/jobs"
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-sky-100 text-brand-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
-                    <Briefcase className="h-4 w-4 text-indigo-600" />
-                    Jobs & Skills
+                    <Briefcase className="h-4 w-4 text-purple-600" />
+                    Jobs
                   </NavLink>
                   <NavLink
                     to="/builder"
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-sky-100 text-brand-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
@@ -149,56 +146,56 @@ export default function Navbar() {
                   <NavLink
                     to="/calendar"
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-sky-100 text-brand-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
-                    <Calendar className="h-4 w-4 text-emerald-600" />
-                    Availability Calendar
+                    <Calendar className="h-4 w-4 text-purple-600" />
+                    Calendar
                   </NavLink>
                   <NavLink
                     to="/control-tower"
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-rose-100 text-rose-800 shadow-xs'
-                          : 'text-slate-600 hover:text-rose-700 hover:bg-rose-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
-                    <ShieldAlert className="h-4 w-4 text-rose-600" />
-                    Control Tower
+                    <ShieldAlert className="h-4 w-4 text-purple-600" />
+                    Issue Monitor
                   </NavLink>
                   <NavLink
                     to="/evaluations"
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-amber-100 text-amber-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
-                    <Trophy className="h-4 w-4 text-amber-600" />
+                    <Trophy className="h-4 w-4 text-purple-600" />
                     Evaluations
                   </NavLink>
                   <NavLink
                     to="/analytics"
                     className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                      `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
                         isActive
-                          ? 'bg-sky-100 text-brand-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                          ? 'bg-white text-slate-900 font-extrabold shadow-xs border border-slate-200/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                       }`
                     }
                   >
-                    <BarChart3 className="h-4 w-4 text-amber-600" />
-                    Analytics & Audit
+                    <BarChart3 className="h-4 w-4 text-purple-600" />
+                    Analytics
                   </NavLink>
-                </>
+                </div>
               )}
 
               {user?.role === 'CANDIDATE' && (
@@ -297,7 +294,7 @@ export default function Navbar() {
               {!user ? (
                 <NavLink
                   to="/login"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-xs transition"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-900 hover:bg-purple-950 text-white text-xs font-bold shadow-xs transition"
                 >
                   <LogIn className="h-4 w-4" />
                   Sign In
@@ -307,12 +304,12 @@ export default function Navbar() {
                   {/* Notification Button */}
                   <button
                     onClick={() => setDrawerOpen(true)}
-                    className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-sky-50 border border-sky-100/70 transition shadow-xs"
+                    className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition shadow-xs"
                     title="Notifications"
                   >
                     <Bell className="h-4 w-4 text-slate-700" />
                     {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white shadow-xs animate-bounce">
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white shadow-xs animate-bounce">
                         {unreadCount}
                       </span>
                     )}
@@ -323,7 +320,7 @@ export default function Navbar() {
                     <button
                       onClick={() => setSwitcherOpen(!switcherOpen)}
                       disabled={switching}
-                      className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-xl border border-sky-200 bg-white hover:bg-sky-50/80 transition shadow-xs"
+                      className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition shadow-xs"
                     >
                       {user.avatarUrl ? (
                         <img
@@ -332,7 +329,7 @@ export default function Navbar() {
                           className="h-7 w-7 rounded-lg object-cover border border-slate-200"
                         />
                       ) : (
-                        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-brand-500 to-indigo-600 flex items-center justify-center text-xs font-extrabold text-white">
+                        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-xs font-extrabold text-white">
                           {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
                         </div>
                       )}
@@ -349,7 +346,7 @@ export default function Navbar() {
                             {user.role}
                           </span>
                         </div>
-                        <span className="text-[10px] text-slate-400 block -mt-0.5">
+                        <span className="text-[10px] font-medium text-slate-500 block -mt-0.5">
                           {user.timezone || 'UTC'}
                         </span>
                       </div>
@@ -358,11 +355,11 @@ export default function Navbar() {
 
                     {/* Dropdown Menu */}
                     {switcherOpen && (
-                      <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white p-2 shadow-2xl border border-sky-100 divide-y divide-slate-100 z-50 animate-fade-in">
+                      <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white p-2 shadow-2xl border border-slate-200 divide-y divide-slate-100 z-50 animate-fade-in">
                         {/* Current User Header */}
                         <div className="px-3 py-2.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900 truncate">
+                            <span className="text-xs font-extrabold text-slate-900 truncate">
                               {user.name}
                             </span>
                             <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${persona.badgeClass}`}>
@@ -377,7 +374,7 @@ export default function Navbar() {
                         {/* Quick Role Switcher for Evaluation */}
                         <div className="py-2">
                           <div className="px-3 mb-1.5">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                               Evaluation Role Switcher
                             </span>
                             <span className="text-[10px] text-slate-500">
@@ -393,11 +390,11 @@ export default function Navbar() {
                                   onClick={() => handlePersonaSwitch(key)}
                                   className={`w-full text-left p-2 rounded-xl transition flex items-center gap-2.5 ${
                                     isCurrent
-                                      ? 'bg-sky-50 text-brand-900 border border-sky-200'
-                                      : 'hover:bg-slate-50 text-slate-700'
+                                      ? 'bg-purple-50 text-purple-900 border border-purple-200 font-bold'
+                                      : 'hover:bg-slate-50 text-slate-700 font-medium'
                                   }`}
                                 >
-                                  <div className="h-7 w-7 rounded-lg bg-sky-100 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                  <div className="h-7 w-7 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center font-extrabold text-xs shrink-0">
                                     {p.name.charAt(0)}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -414,7 +411,7 @@ export default function Navbar() {
                                     </span>
                                   </div>
                                   {isCurrent && (
-                                    <CheckCircle2 className="h-4 w-4 text-brand-600 shrink-0" />
+                                    <CheckCircle2 className="h-4 w-4 text-purple-600 shrink-0" />
                                   )}
                                 </button>
                               );

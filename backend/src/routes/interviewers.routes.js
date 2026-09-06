@@ -202,7 +202,11 @@ router.get(
     });
     res.json(
       seats.map((seat) => ({
-        ...shapeInterview(seat.interview, { viewerTimezone: profile?.user?.timezone, viewerRole: ROLES.INTERVIEWER }),
+        ...shapeInterview(seat.interview, {
+          viewerTimezone: profile?.user?.timezone,
+          viewerRole: ROLES.INTERVIEWER,
+          includeFeedback: true,
+        }),
         mySeat: {
           id: seat.id,
           role: seat.role,
