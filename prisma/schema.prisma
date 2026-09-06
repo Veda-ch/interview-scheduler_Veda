@@ -1,0 +1,589 @@
+// =====================================================================
+//  Smart Interview Scheduler - Prisma schema
+// ---------------------------------------------------------------------
+//  PORTABILITY CONTRACT (deliberate design decision, see docs/ARCHITECTURE.md §6):
+//  This schema uses NO enum, NO scalar list and NO Json column, so the exact
+//  same file runs on SQLite (zero-install demo + fast tests) and PostgreSQL
+//  (production). Enumerations are String columns validated against the shared
+//  constant sets in shared/constants.js; structured payloads are JSON-encoded
+//  String columns read/written through the typed helpers in backend/src/lib/json.js.
+//  Switch engines with: npm run db:use-postgres  /  npm run db:use-sqlite
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Identity & access
+// ---------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String // RECRUITER | CANDIDATE | INTERVIEWER | ADMIN
+  timezone     String   @default("UTC") // IANA zone, e.g. "Asia/Kolkata"
+  phone        String?
+  avatarSeed   String?
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  candidateProfile   CandidateProfile?
+  interviewerProfile InterviewerProfile?
+  recruiterProfile   RecruiterProfile?
+
+  availability   AvailabilityWindow[]
+  bookings       Booking[]
+  notifications  Notification[]
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
+  calendarLinks  CalendarConnection[]
+
+  @@index([role])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------
+// Profiles
+// ---------------------------------------------------------------------
+
+model CandidateProfile {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  headline          String?
+  yearsExperience   Float   @default(0)
+  currentCompany    String?
+  location          String?
+  resumeUrl         String?
+  resumeText        String? // extracted plain text used for AI analysis
+  resumeAnalysisJson String? // validated AI output {skills, summary, ...}
+  // Candidate scheduling preferences (soft constraints)
+  maxInterviewsPerDay Int    @default(2)
+  minBufferMinutes    Int    @default(30)
+  preferredStartMinute Int   @default(540) // 09:00 local, minutes from midnight
+  preferredEndMinute   Int   @default(1200) // 20:00 local
+  availabilityNoteRaw  String? // original natural-language availability text
+  availabilityConstraintsJson String? // validated structured constraints from AI
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills       CandidateSkill[]
+  applications Application[]
+}
+
+model InterviewerProfile {
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  title               String?
+  department          String?
+  seniority           String  @default("MID") // JUNIOR | MID | SENIOR | STAFF | PRINCIPAL
+  yearsExperience     Float   @default(0)
+  maxInterviewsPerDay Int     @default(3)
+  maxInterviewsPerWeek Int    @default(10)
+  workStartMinute     Int     @default(540) // 09:00 local
+  workEndMinute       Int     @default(1080) // 18:00 local
+  workDaysCsv         String  @default("1,2,3,4,5") // ISO weekday numbers, Mon=1
+  interviewTypesCsv   String  @default("TECHNICAL") // TECHNICAL,CODING,SYSTEM_DESIGN,MANAGERIAL,HR
+  isActive            Boolean @default(true)
+  bioText             String?
+
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills       InterviewerSkill[]
+  panelSeats   InterviewPanelMember[]
+  feedback     Feedback[]
+}
+
+model RecruiterProfile {
+  id         String  @id @default(cuid())
+  userId     String  @unique
+  department String?
+  title      String?
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs       Job[]
+}
+
+// ---------------------------------------------------------------------
+// Skills taxonomy
+// ---------------------------------------------------------------------
+
+model Skill {
+  id         String @id @default(cuid())
+  name       String @unique
+  category   String @default("TECHNICAL") // TECHNICAL | SOFT | DOMAIN | TOOL
+  aliasesCsv String @default("")
+
+  candidateSkills   CandidateSkill[]
+  interviewerSkills InterviewerSkill[]
+}
+
+model CandidateSkill {
+  id          String @id @default(cuid())
+  candidateId String
+  skillId     String
+  proficiency Int    @default(3) // 1..5
+  source      String @default("SELF") // SELF | RESUME_AI | RECRUITER
+
+  candidate CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skill     Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, skillId])
+}
+
+model InterviewerSkill {
+  id              String @id @default(cuid())
+  interviewerId   String
+  skillId         String
+  proficiency     Int    @default(3) // 1..5
+  yearsExperience Float  @default(0)
+
+  interviewer InterviewerProfile @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+  skill       Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewerId, skillId])
+}
+
+// ---------------------------------------------------------------------
+// Availability & bookings (the time layer - everything stored in UTC)
+// ---------------------------------------------------------------------
+
+model AvailabilityWindow {
+  id             String   @id @default(cuid())
+  userId         String
+  startUtc       DateTime
+  endUtc         DateTime
+  kind           String   @default("AVAILABLE") // AVAILABLE | PREFERRED | UNAVAILABLE
+  sourceTimezone String   @default("UTC")
+  note           String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startUtc])
+}
+
+/// Hard reservation of a person's time. The double-booking guard lives here.
+model Booking {
+  id          String   @id @default(cuid())
+  userId      String
+  interviewId String?
+  startUtc    DateTime
+  endUtc      DateTime
+  kind        String   @default("INTERVIEW") // INTERVIEW | BUFFER | EXTERNAL
+  createdAt   DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interview Interview? @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, startUtc, kind])
+  @@index([userId, startUtc, endUtc])
+  @@index([interviewId])
+}
+
+// ---------------------------------------------------------------------
+// Hiring pipeline
+// ---------------------------------------------------------------------
+
+model Job {
+  id                 String   @id @default(cuid())
+  title              String
+  description        String
+  department         String?
+  location           String?
+  employmentType     String   @default("FULL_TIME")
+  experienceMin      Float    @default(0)
+  experienceMax      Float    @default(10)
+  requiredSkillsJson String   @default("[]") // [{name, weight, mustHave}]
+  aiExtractionJson   String? // raw validated AI JD analysis
+  aiProviderUsed     String? // which provider produced it (transparency)
+  status             String   @default("OPEN") // OPEN | PAUSED | CLOSED
+  recruiterId        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  recruiter    RecruiterProfile @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([status])
+}
+
+model Application {
+  id                 String   @id @default(cuid())
+  jobId              String
+  candidateId        String
+  status             String   @default("ACTIVE") // ACTIVE | HIRED | REJECTED | WITHDRAWN
+  stage              String   @default("SCREENING")
+  matchScore         Float? // 0..100 JD vs resume match
+  matchBreakdownJson String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  job       Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  requests  InterviewRequest[]
+
+  @@unique([jobId, candidateId])
+}
+
+model InterviewRequest {
+  id                       String   @id @default(cuid())
+  applicationId            String
+  roundNumber              Int      @default(1)
+  roundName                String // "Technical Round 1"
+  interviewType            String // TECHNICAL | CODING | SYSTEM_DESIGN | MANAGERIAL | HR
+  durationMinutes          Int      @default(60)
+  requiredInterviewerCount Int      @default(1)
+  bufferMinutes            Int      @default(15)
+  earliestUtc              DateTime
+  latestUtc                DateTime
+  requiredSkillsJson       String   @default("[]")
+  focusTopicsJson          String   @default("[]") // carried from previous-round AI feedback analysis
+  priority                 String   @default("NORMAL") // LOW | NORMAL | HIGH
+  status                   String   @default("PENDING") // PENDING | PROPOSED | SCHEDULED | COMPLETED | CANCELLED | FAILED
+  failureReason            String?
+  dependsOnRequestId       String? // round dependency: cannot start before this one completes
+  createdById              String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  application Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  dependsOn   InterviewRequest?  @relation("RoundDependency", fields: [dependsOnRequestId], references: [id])
+  dependents  InterviewRequest[] @relation("RoundDependency")
+  proposals   SlotProposal[]
+  interviews  Interview[]
+  simulations ScheduleSimulation[]
+
+  @@index([status])
+  @@index([applicationId])
+}
+
+model SlotProposal {
+  id                String   @id @default(cuid())
+  requestId         String
+  rank              Int
+  startUtc          DateTime
+  endUtc            DateTime
+  score             Float
+  riskScore         Float    @default(0)
+  resilienceScore   Float? // from Monte-Carlo simulation (null if not simulated)
+  interviewerIdsCsv String
+  reasonsJson       String   @default("[]")
+  breakdownJson     String   @default("{}")
+  engineUsed        String   @default("ORTOOLS") // ORTOOLS | JS_FALLBACK
+  status            String   @default("OPEN") // OPEN | ACCEPTED | REJECTED | EXPIRED
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+
+  request InterviewRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, rank])
+}
+
+// ---------------------------------------------------------------------
+// Scheduled interviews
+// ---------------------------------------------------------------------
+
+model Interview {
+  id                String   @id @default(cuid())
+  requestId         String
+  startUtc          DateTime
+  endUtc            DateTime
+  status            String   @default("SCHEDULED") // SCHEDULED | CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED | RESCHEDULED | NO_SHOW
+  candidateResponse String   @default("PENDING") // PENDING | ACCEPTED | DECLINED | RESCHEDULE_REQUESTED
+  candidateResponseNote String?
+  scheduleScore     Float    @default(0)
+  riskScore         Float    @default(0)
+  resilienceScore   Float?
+  reasonsJson       String   @default("[]")
+  engineUsed        String   @default("ORTOOLS")
+  actualStartUtc    DateTime?
+  actualEndUtc      DateTime?
+  cancelReason      String?
+  rescheduledFromId String? // chain of reschedules
+  version           Int      @default(0) // optimistic lock
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  request       InterviewRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  panel         InterviewPanelMember[]
+  bookings      Booking[]
+  meeting       Meeting?
+  calendarEvent CalendarEventRecord?
+  feedback      Feedback[]
+  incidents     Incident[]
+  scores        ScheduleScore[]
+
+  @@index([status, startUtc])
+  @@index([requestId])
+}
+
+model InterviewPanelMember {
+  id             String   @id @default(cuid())
+  interviewId    String
+  interviewerId  String
+  role           String   @default("PRIMARY") // PRIMARY | SECONDARY | SHADOW
+  responseStatus String   @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  declineReason  String?
+  matchScore     Float    @default(0)
+  matchReasonsJson String @default("[]")
+  respondedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  interview   Interview          @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewer InterviewerProfile @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, interviewerId])
+  @@index([interviewerId])
+}
+
+model Feedback {
+  id             String   @id @default(cuid())
+  interviewId    String
+  interviewerId  String
+  overallRating  Int // 1..5
+  recommendation String // STRONG_YES | YES | NEUTRAL | NO | STRONG_NO
+  ratingsJson    String   @default("{}") // {"Technical Knowledge": 4, ...}
+  comments       String
+  aiAnalysisJson String? // validated {strengths, skill_gaps, recommended_topics, sentiment}
+  aiProviderUsed String?
+  submittedAt    DateTime @default(now())
+
+  interview   Interview          @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewer InterviewerProfile @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, interviewerId])
+}
+
+// ---------------------------------------------------------------------
+// External integrations
+// ---------------------------------------------------------------------
+
+model Meeting {
+  id          String   @id @default(cuid())
+  interviewId String   @unique
+  provider    String // JITSI | GOOGLE_MEET | ZOOM | MOCK
+  externalId  String
+  joinUrl     String
+  hostUrl     String?
+  passcode    String?
+  status      String   @default("ACTIVE") // ACTIVE | CANCELLED | FAILED
+  lastError   String?
+  createdAt   DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model CalendarEventRecord {
+  id           String   @id @default(cuid())
+  interviewId  String   @unique
+  provider     String // GOOGLE | MOCK | OUTLOOK
+  externalId   String
+  htmlLink     String?
+  status       String   @default("CONFIRMED") // CONFIRMED | CANCELLED | SYNC_FAILED
+  syncError    String?
+  lastSyncedAt DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model CalendarConnection {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String // GOOGLE | MOCK
+  accountEmail String?
+  accessToken  String? // encrypted at rest via lib/crypto.js
+  refreshToken String?
+  expiresAt    DateTime?
+  scope        String?
+  status       String   @default("CONNECTED") // CONNECTED | EXPIRED | REVOKED
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  userId        String
+  type          String // INTERVIEW_SCHEDULED | INTERVIEW_CONFIRMED | ...
+  channel       String   @default("IN_APP") // IN_APP | EMAIL | SMS
+  title         String
+  body          String
+  status        String   @default("PENDING") // PENDING | SENT | FAILED | READ
+  relatedEntity String?
+  relatedId     String?
+  errorMessage  String?
+  personalized  Boolean  @default(false) // true when body was AI-personalised
+  readAt        DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+// ---------------------------------------------------------------------
+// Control Tower
+// ---------------------------------------------------------------------
+
+model Incident {
+  id          String   @id @default(cuid())
+  interviewId String?
+  type        String // INTERVIEWER_DECLINED | INTERVIEWER_UNAVAILABLE | CANDIDATE_CANCELLED |
+  //                    CANDIDATE_NO_SHOW | RESCHEDULE_REQUESTED | INTERVIEW_OVERRUN |
+  //                    MEETING_LINK_FAILURE | CALENDAR_SYNC_FAILURE | SCHEDULING_CONFLICT |
+  //                    INTERVIEWER_OVERLOAD | CASCADE_DELAY | UNCONFIRMED_IMMINENT
+  severity    String   @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
+  status      String   @default("OPEN") // OPEN | ANALYZING | AWAITING_APPROVAL | RECOVERING | RESOLVED | DISMISSED | FAILED
+  title       String
+  description String
+  detectedBy  String   @default("MONITOR") // MONITOR | USER | SYSTEM
+  impactJson  String   @default("{}") // affected people, downstream rounds, cascade depth
+  detectedAt  DateTime @default(now())
+  resolvedAt  DateTime?
+  dedupeKey   String   @unique // prevents the monitor raising the same incident twice
+
+  interview Interview?      @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  plans     RecoveryPlan[]
+  actions   RecoveryAction[]
+
+  @@index([status, severity])
+}
+
+model RecoveryPlan {
+  id              String   @id @default(cuid())
+  incidentId      String
+  strategy        String // REPLACE_INTERVIEWER | SHIFT_TIME | RESCHEDULE_SLOT | REDUCE_PANEL |
+  //                        REGENERATE_MEETING | RETRY_SYNC | NOTIFY_ONLY | CANCEL_AND_REQUEUE
+  description     String
+  score           Float // higher is better
+  disruptionScore Float // lower is better
+  riskLevel       String // LOW | MEDIUM | HIGH
+  payloadJson     String   @default("{}") // machine-readable instructions to apply the plan
+  reasonsJson     String   @default("[]")
+  isRecommended   Boolean  @default(false)
+  status          String   @default("PROPOSED") // PROPOSED | APPLIED | REJECTED | FAILED
+  createdAt       DateTime @default(now())
+
+  incident Incident         @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  actions  RecoveryAction[]
+}
+
+model RecoveryAction {
+  id              String   @id @default(cuid())
+  incidentId      String
+  planId          String?
+  action          String
+  status          String   @default("PENDING") // PENDING | AWAITING_APPROVAL | APPLIED | FAILED | REJECTED
+  requiresApproval Boolean @default(false)
+  autoApplied     Boolean  @default(false)
+  approvedById    String?
+  approvedAt      DateTime?
+  appliedAt       DateTime?
+  reason          String?
+  resultJson      String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  incident Incident      @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  plan     RecoveryPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+}
+
+// ---------------------------------------------------------------------
+// Scoring, simulation, audit, settings
+// ---------------------------------------------------------------------
+
+model ScheduleScore {
+  id                     String   @id @default(cuid())
+  interviewId            String
+  healthScore            Float // 0..100 explainable heuristic
+  conflictRisk           Float
+  cascadeRisk            Float
+  interviewerLoad        Float
+  candidateInconvenience Float
+  waitingRisk            Float
+  timezoneRisk           Float
+  bufferQuality          Float
+  breakdownJson          String   @default("{}")
+  computedAt             DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+}
+
+model ScheduleSimulation {
+  id              String   @id @default(cuid())
+  requestId       String?
+  interviewId     String?
+  label           String   @default("baseline")
+  iterations      Int
+  resilienceScore Float
+  meanDisruption  Float
+  p95Disruption   Float
+  recoveryRate    Float
+  scenariosJson   String   @default("[]")
+  seed            Int?
+  createdAt       DateTime @default(now())
+
+  request InterviewRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  actorRole    String   @default("SYSTEM")
+  action       String // INTERVIEW_CREATED | SLOT_RECOMMENDED | RECOVERY_APPLIED | ...
+  entity       String
+  entityId     String?
+  summary      String   @default("")
+  metadataJson String   @default("{}")
+  ip           String?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  valueType   String   @default("STRING") // STRING | INT | FLOAT | BOOL | JSON
+  description String   @default("")
+  updatedAt   DateTime @updatedAt
+}
+
+/// Makes retried POSTs idempotent (duplicate scheduling requests, double-clicks).
+model IdempotencyKey {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  userId       String?
+  endpoint     String
+  statusCode   Int      @default(200)
+  responseJson String   @default("{}")
+  createdAt    DateTime @default(now())
+}

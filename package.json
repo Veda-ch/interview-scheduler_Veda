@@ -1,0 +1,44 @@
+{
+  "name": "smart-interview-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI Interview Orchestration Platform - control tower for the interview pipeline",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "node prisma/seed.js"
+  },
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "prisma studio",
+    "db:use-postgres": "node scripts/set-db-provider.js postgresql",
+    "db:use-sqlite": "node scripts/set-db-provider.js sqlite",
+    "setup": "npm install && npm run db:generate && npm run db:push && npm run db:seed",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:ai": "node scripts/run-ai-service.js",
+    "dev": "concurrently -n AI,API,WEB -c magenta,cyan,green \"npm:dev:ai\" \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "build": "npm run build --workspace frontend",
+    "test": "npm run test --workspace backend",
+    "test:ai": "node scripts/run-ai-tests.js",
+    "test:all": "npm run test && npm run test:ai"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prisma": "^6.2.1"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
