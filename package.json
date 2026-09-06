@@ -38,7 +38,8 @@
     "prisma": "^6.2.1"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.1"
+    "@prisma/client": "^6.2.1",
+    "twilio": "^6.1.0"
   },
   "engines": {
     "node": ">=20"
