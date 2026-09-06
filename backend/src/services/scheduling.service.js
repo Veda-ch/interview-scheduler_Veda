@@ -33,7 +33,8 @@ import {
   DateTime,
 } from '../lib/time.js';
 import { noFeasibleSchedule, notFound } from '../lib/errors.js';
-import { SETTING_KEYS, REQUEST_STATUS, ACTIVE_INTERVIEW_STATUSES } from '../../../shared/constants.js';
+import { notify } from './notification.service.js';
+import { SETTING_KEYS, REQUEST_STATUS, ACTIVE_INTERVIEW_STATUSES, NOTIFICATION_TYPES } from '../../../shared/constants.js';
 
 /** Soft-objective weights. Mirrored in ai-service/app/services/optimizer.py. */
 export const SLOT_WEIGHTS = Object.freeze({
@@ -500,6 +501,20 @@ export async function generateProposals(requestId, { excludeInterviewId = null, 
     const ids = await persistProposals(requestId, proposals, engineUsed, settings);
     proposals.forEach((p, i) => {
       p.id = ids[i];
+    });
+
+    await notify({
+      userId: request.application.candidate.userId,
+      type: NOTIFICATION_TYPES.SLOTS_PROPOSED,
+      context: {
+        jobTitle: request.application.job.title,
+        roundName: request.roundName,
+        slotCount: proposals.length,
+        slotLabel: humanSlot(proposals[0].startUtc, proposals[0].endUtc, space.candidateZone),
+      },
+      channels: ['SMS'],
+      relatedEntity: 'InterviewRequest',
+      relatedId: requestId,
     });
   }
 

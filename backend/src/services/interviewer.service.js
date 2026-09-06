@@ -19,6 +19,7 @@ export function shapeInterviewer(row, extras = {}) {
     name: row.user?.name,
     email: row.user?.email,
     timezone: row.user?.timezone,
+    phone: row.user?.phone ?? null,
     avatarSeed: row.user?.avatarSeed ?? null,
     title: row.title,
     department: row.department,

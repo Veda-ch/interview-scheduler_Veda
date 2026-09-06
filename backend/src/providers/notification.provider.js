@@ -106,7 +106,14 @@ let instance = null;
 
 export function getNotificationProvider() {
   if (instance) return instance;
-  if (config.providers.notification === 'smtp') {
+  if (config.providers.notification === 'twilio') {
+    if (!config.twilio.configured) {
+      logger.warn('NOTIFICATION_PROVIDER=twilio without Twilio credentials - using the mock outbox');
+      instance = new MockNotificationProvider();
+    } else {
+      instance = new TwilioSmsProvider();
+    }
+  } else if (config.providers.notification === 'smtp') {
     if (!config.smtp.configured) {
       logger.warn('NOTIFICATION_PROVIDER=smtp without SMTP_HOST/USER - using the mock outbox');
       instance = new MockNotificationProvider();
