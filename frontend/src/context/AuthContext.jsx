@@ -86,6 +86,14 @@ export function AuthProvider({ children }) {
     return me;
   }
 
+  /** Persist account-level settings (name, timezone, phone) and refresh context. */
+  async function updateAccount(patch) {
+    const updated = await api.put('/users/me', patch);
+    tokens.set({ user: updated });
+    setUser(updated);
+    return updated;
+  }
+
   async function logout() {
     try {
       if (tokens.refresh) {
@@ -127,6 +135,7 @@ export function AuthProvider({ children }) {
         login,
         register,
         handleOAuthTokens,
+        updateAccount,
         logout,
         switchPersona,
         currentPersonaKey: Object.keys(DEMO_PERSONAS).find(

@@ -1,8 +1,11 @@
 /**
  * THE CONTROL TOWER
  *
- * Lifecycle: DETECT -> ANALYSE IMPACT -> GENERATE RECOVERY OPTIONS -> SIMULATE
- * -> RANK -> (AUTO-APPLY | REQUEST APPROVAL) -> NOTIFY -> AUDIT
+ * Lifecycle: DETECT -> ANALYSE IMPACT -> GENERATE RECOVERY OPTIONS
+ * -> (AUTO-APPLY | REQUEST APPROVAL) -> NOTIFY -> AUDIT
+ *
+ * Recovery options are ordered by a fixed strategy precedence, not scored: for
+ * a given incident type the proposal order is the same every time.
  *
  * Two invariants make this safe rather than reckless:
  *
@@ -33,7 +36,6 @@ import {
 } from './orchestration.service.js';
 import { fullInterviewInclude } from './interview.shape.js';
 import { getSettings } from './settings.service.js';
-import { callAiService } from '../providers/aiClient.js';
 import { addMinutes, humanSlot } from '../lib/time.js';
 import {
   AUDIT_ACTIONS,
@@ -222,6 +224,29 @@ export async function analyzeImpact(interview) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Recovery strategies in order of preference, least disruptive first.
+ *
+ * This ordering is a stated policy rather than a computed ranking: for a given
+ * incident type the system proposes the same plan order every time, so what it
+ * will do next is predictable rather than the output of a scoring function.
+ */
+const STRATEGY_PRECEDENCE = [
+  RECOVERY_STRATEGY.RETRY_SYNC,
+  RECOVERY_STRATEGY.REGENERATE_MEETING,
+  RECOVERY_STRATEGY.REPLACE_INTERVIEWER,
+  RECOVERY_STRATEGY.NOTIFY_ONLY,
+  RECOVERY_STRATEGY.REDUCE_PANEL,
+  RECOVERY_STRATEGY.SHIFT_TIME,
+  RECOVERY_STRATEGY.RESCHEDULE_SLOT,
+  RECOVERY_STRATEGY.CANCEL_AND_REQUEUE,
+];
+
+const strategyRank = (strategy) => {
+  const i = STRATEGY_PRECEDENCE.indexOf(strategy);
+  return i === -1 ? STRATEGY_PRECEDENCE.length : i;
+};
+
+/**
  * Produce concrete, executable recovery plans for an incident.
  * Each plan carries a machine-readable payload so applying it is mechanical.
  */
@@ -254,8 +279,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
         push({
           strategy: RECOVERY_STRATEGY.REPLACE_INTERVIEWER,
           description: `Assign ${r.name} to the same slot (${humanSlot(interview.startUtc, interview.endUtc, r.timezone)} their time)`,
-          score: 60 + r.matchScore * 0.4,
-          disruptionScore: 10, // nobody's time changes; only the panel does
           payload: { outgoingInterviewerId: leavingId, incomingInterviewerId: r.interviewerId },
           reasons: [
             `${r.matchScore}% skill match for this round`,
@@ -275,8 +298,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
         push({
           strategy: RECOVERY_STRATEGY.REDUCE_PANEL,
           description: `Run the interview with the remaining ${remaining.length} interviewer(s)`,
-          score: 45,
-          disruptionScore: 25,
           payload: { keepInterviewerIds: remaining.map((p) => p.interviewerId) },
           reasons: [
             'Time and candidate are unaffected',
@@ -290,8 +311,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
         push({
           strategy: RECOVERY_STRATEGY.RESCHEDULE_SLOT,
           description: 'No qualified interviewer is free at this time - find a new slot entirely',
-          score: 30,
-          disruptionScore: 70,
           payload: { regenerate: true },
           reasons: [
             `${consideredButUnavailable} qualified interviewer(s) exist but none are free for this exact slot`,
@@ -311,8 +330,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.NOTIFY_ONLY,
         description: `Notify the participants of the next interview that it may start ~${overrunMinutes} minutes late`,
-        score: 70,
-        disruptionScore: overrunMinutes,
         payload: { notifyInterviewId: nextForPanel?.id ?? null, overrunMinutes },
         reasons: [
           `The current interview is ${overrunMinutes} minutes past its scheduled end`,
@@ -327,8 +344,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
         push({
           strategy: RECOVERY_STRATEGY.SHIFT_TIME,
           description: `Push the next interview back by ${Math.ceil(overrunMinutes / 5) * 5} minutes`,
-          score: 55,
-          disruptionScore: overrunMinutes * 2,
           payload: { shiftInterviewId: nextForPanel.id, minutes: Math.ceil(overrunMinutes / 5) * 5 },
           reasons: [
             'Keeps the panel intact and the same day',
@@ -346,8 +361,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.RESCHEDULE_SLOT,
         description: 'Generate a fresh set of ranked slots and propose them to the candidate',
-        score: 65,
-        disruptionScore: 55,
         payload: { regenerate: true, cancelCurrent: true },
         reasons: [
           'The candidate explicitly asked for a different time',
@@ -358,8 +371,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.CANCEL_AND_REQUEUE,
         description: 'Cancel this interview and return the round to the pending queue',
-        score: 35,
-        disruptionScore: 80,
         payload: { cancel: true },
         reasons: [
           'Frees the panel immediately',
@@ -374,8 +385,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.NOTIFY_ONLY,
         description: 'Alert the recruiter and release the panel, keeping the record as NO_SHOW',
-        score: 60,
-        disruptionScore: 30,
         payload: { markNoShow: true },
         reasons: [
           'The candidate did not join within the grace period',
@@ -391,8 +400,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.REGENERATE_MEETING,
         description: 'Regenerate the meeting link and re-notify the participants',
-        score: 90,
-        disruptionScore: 3,
         payload: { regenerateMeeting: true },
         reasons: [
           'Nothing about the schedule changes',
@@ -407,8 +414,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.RETRY_SYNC,
         description: 'Retry the calendar sync for this interview',
-        score: 88,
-        disruptionScore: 2,
         payload: { retrySync: true },
         reasons: [
           'The interview itself is valid in the portal regardless',
@@ -423,8 +428,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.NOTIFY_ONLY,
         description: 'Send an urgent confirmation reminder to everyone who has not responded',
-        score: 85,
-        disruptionScore: 2,
         payload: { remindUnconfirmed: true },
         reasons: [
           `Interview starts in ${impact.hoursUntilStart}h with unconfirmed participants`,
@@ -439,8 +442,6 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.NOTIFY_ONLY,
         description: 'Flag the overloaded interviewer to the recruiter for rebalancing',
-        score: 70,
-        disruptionScore: 5,
         payload: { notifyRecruiterOnly: true },
         reasons: [
           'Load ceilings are the interviewer\'s own declared limits',
@@ -455,73 +456,20 @@ async function generateRecoveryPlans(incident, interview, impact, context) {
       push({
         strategy: RECOVERY_STRATEGY.NOTIFY_ONLY,
         description: 'Notify the recruiter for manual handling',
-        score: 40,
-        disruptionScore: 10,
         payload: {},
         reasons: ['No automated strategy matches this incident type'],
       });
     }
   }
 
-  // --- Simulate each plan's residual risk so ranking is not pure heuristic.
-  if (interview && plans.length) {
-    await simulatePlans(plans, interview, impact, settings);
-  }
-
-  // --- Rank: benefit minus disruption, with a small bonus for lower risk.
-  for (const p of plans) {
-    p.finalScore =
-      p.score * 0.6 -
-      p.disruptionScore * 0.3 +
-      (4 - RISK_ORDER[p.riskLevel]) * 5 +
-      (p.residualResilience ? p.residualResilience * 0.1 : 0);
-  }
-  plans.sort((a, b) => b.finalScore - a.finalScore);
+  // --- Order by a fixed strategy precedence, least disruptive first.
+  // This is a stated policy, not a computed ranking: the ordering below is the
+  // same every time for the same incident type, so a recruiter can predict what
+  // the system will propose.
+  plans.sort((a, b) => strategyRank(a.strategy) - strategyRank(b.strategy));
   if (plans.length) plans[0].isRecommended = true;
 
   return plans;
-}
-
-/** Ask the Monte-Carlo simulator how each recovered schedule would hold up. */
-async function simulatePlans(plans, interview, impact, settings) {
-  const { computeWorkloadBulk } = await import('./interviewer.service.js');
-  const loads = await computeWorkloadBulk(interview.panel.map((p) => p.interviewerId));
-  const baseUtil = interview.panel.map((p) => loads.get(p.interviewerId)?.utilization ?? 0.5);
-
-  const payload = {
-    iterations: Math.min(settings[SETTING_KEYS.SIMULATION_ITERATIONS] || 200, 500),
-    schedules: plans.map((p, i) => ({
-      id: String(i),
-      start_utc: new Date(interview.startUtc).toISOString(),
-      end_utc: new Date(interview.endUtc).toISOString(),
-      // A plan that shifts time changes the buffer picture.
-      buffer_minutes:
-        p.strategy === RECOVERY_STRATEGY.SHIFT_TIME
-          ? Math.max(0, interview.request.bufferMinutes - 5)
-          : interview.request.bufferMinutes,
-      panel: (p.strategy === RECOVERY_STRATEGY.REDUCE_PANEL ? baseUtil.slice(0, -1) : baseUtil).map((u, idx) => ({
-        id: `p${idx}`,
-        utilization: u,
-        timezone: interview.panel[idx]?.interviewer.user.timezone || 'UTC',
-        backup_count: p.strategy === RECOVERY_STRATEGY.REPLACE_INTERVIEWER ? 2 : 1,
-      })),
-      candidate_timezone: interview.request.application.candidate.user.timezone,
-      days_out: Math.max(0, (interview.startUtc - Date.now()) / 86400000),
-      downstream_interviews: impact.cascadeDepth,
-    })),
-  };
-
-  const res = await callAiService('/schedule/simulate', payload, { timeoutMs: 12000 });
-  if (!res.ok || !Array.isArray(res.data?.results)) return;
-
-  res.data.results.forEach((r) => {
-    const plan = plans[Number(r.id)];
-    if (!plan) return;
-    plan.residualResilience = r.resilience_score;
-    plan.reasons.push(
-      `Simulated: resilience ${r.resilience_score}/100 after this recovery, ${Math.round(r.recovery_rate * 100)}% of remaining disruptions self-recoverable`
-    );
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -570,8 +518,6 @@ export async function processIncident(incidentId, { context = {} } = {}) {
           incidentId,
           strategy: p.strategy,
           description: p.description,
-          score: Math.round(p.finalScore * 10) / 10,
-          disruptionScore: p.disruptionScore,
           riskLevel: p.riskLevel,
           payloadJson: stringifyJson(p.payload),
           reasonsJson: stringifyJson(p.reasons),
@@ -587,7 +533,7 @@ export async function processIncident(incidentId, { context = {} } = {}) {
     entity: 'Incident',
     entityId: incidentId,
     summary: `${savedPlans.length} recovery option(s) generated; recommended: ${savedPlans.find((p) => p.isRecommended)?.strategy || 'none'}`,
-    metadata: { plans: savedPlans.map((p) => ({ strategy: p.strategy, risk: p.riskLevel, score: p.score })) },
+    metadata: { plans: savedPlans.map((p) => ({ strategy: p.strategy, risk: p.riskLevel })) },
   });
 
   const recommended = savedPlans.find((p) => p.isRecommended);
@@ -1012,8 +958,6 @@ export function shapeIncident(row) {
       id: p.id,
       strategy: p.strategy,
       description: p.description,
-      score: p.score,
-      disruptionScore: p.disruptionScore,
       riskLevel: p.riskLevel,
       isRecommended: p.isRecommended,
       status: p.status,
@@ -1048,7 +992,7 @@ export async function listIncidents({ status, severity, take = 50, includeResolv
           panel: { include: { interviewer: { include: { user: true } } } },
         },
       },
-      plans: { orderBy: { score: 'desc' } },
+      plans: { orderBy: { createdAt: 'asc' } },
       actions: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: [{ status: 'asc' }, { detectedAt: 'desc' }],
@@ -1067,7 +1011,7 @@ export async function getIncident(incidentId) {
           panel: { include: { interviewer: { include: { user: true } } } },
         },
       },
-      plans: { orderBy: { score: 'desc' } },
+      plans: { orderBy: { createdAt: 'asc' } },
       actions: { orderBy: { createdAt: 'desc' } },
     },
   });

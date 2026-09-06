@@ -33,7 +33,7 @@ export default function VirtualRoom() {
           setMeeting(iv.meeting);
         } else {
           // If no meeting exists yet, try joining room endpoint
-          const joinInfo = await api.get(`/interviews/${id}/meeting`).catch(() => null);
+          const joinInfo = await api.get(`/meetings/${id}`).catch(() => null);
           setMeeting(joinInfo);
         }
       } catch (err) {
@@ -73,11 +73,11 @@ export default function VirtualRoom() {
           <div>
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              {interview?.request?.roundName || 'Interview Session'}
+              {interview?.round?.name || 'Interview Session'}
             </h2>
             <span className="text-xs text-slate-400">
-              {interview?.request?.application?.candidate?.user?.name || 'Candidate'} •{' '}
-              {interview?.request?.application?.job?.title || 'Engineer'}
+              {interview?.candidate?.name || 'Candidate'} •{' '}
+              {interview?.job?.title || 'Engineer'}
             </span>
           </div>
         </div>

@@ -23,7 +23,7 @@ const INTERVIEW_TYPES = [
   { value: 'HR', label: 'HR & Screening' },
 ];
 
-export default function RequestModal({ isOpen, onClose, onSuccess }) {
+export default function RequestModal({ isOpen, onClose, onSuccess, initialApplicationId = null }) {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -51,39 +51,44 @@ export default function RequestModal({ isOpen, onClose, onSuccess }) {
     { name: 'SQL', weight: 0.7, mustHave: false },
   ]);
   const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillWeight, setNewSkillWeight] = useState(0.8);
 
   useEffect(() => {
     if (isOpen) {
       loadApplications();
     }
-  }, [isOpen]);
+  }, [isOpen, initialApplicationId]);
 
   async function loadApplications() {
     setLoading(true);
     try {
-      // In this demo, we can list jobs or candidates to find active applications
-      const candidates = await api.get('/candidates?take=20');
+      const res = await api.get('/candidates?take=50');
+      const candidateList = res?.items || res || [];
       const apps = [];
-      for (const c of candidates || []) {
+      for (const c of candidateList) {
+        const num = c.candidateNumber || `CND-${(c.id || '').slice(-4).toUpperCase()}`;
         if (c.applications && c.applications.length) {
           for (const app of c.applications) {
             apps.push({
               id: app.id,
+              candidateNumber: num,
               candidateName: c.name,
               candidateId: c.id,
-              jobTitle: app.job?.title || 'Senior Software Engineer',
-              skills: c.skills?.map((s) => s.skill?.name || s.name) || [],
+              jobTitle: app.jobTitle || app.job?.title || c.headline || 'Engineer',
+              skills: c.skills?.map((s) => s.name || s.skill?.name) || [],
             });
           }
         }
       }
       setApplications(apps);
-      if (apps.length > 0 && !applicationId) {
-        setApplicationId(apps[0].id);
-        // pre-seed skills from first candidate if available
-        if (apps[0].skills.length) {
+
+      const targetId = initialApplicationId || (apps.length > 0 ? apps[0].id : '');
+      if (targetId) {
+        setApplicationId(targetId);
+        const selected = apps.find((a) => a.id === targetId);
+        if (selected && selected.skills?.length) {
           setSkills(
-            apps[0].skills.slice(0, 3).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
+            selected.skills.slice(0, 4).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
           );
         }
       }
@@ -99,15 +104,21 @@ export default function RequestModal({ isOpen, onClose, onSuccess }) {
     const selected = applications.find((a) => a.id === appId);
     if (selected && selected.skills?.length) {
       setSkills(
-        selected.skills.slice(0, 3).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
+        selected.skills.slice(0, 4).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
       );
     }
   }
 
   function addSkill() {
     if (!newSkillName.trim()) return;
-    setSkills([...skills, { name: newSkillName.trim(), weight: 0.8, mustHave: true }]);
+    setSkills([...skills, { name: newSkillName.trim(), weight: Number(newSkillWeight), mustHave: true }]);
     setNewSkillName('');
+  }
+
+  function updateSkillWeight(idx, weight) {
+    const updated = [...skills];
+    updated[idx] = { ...updated[idx], weight: Number(weight) };
+    setSkills(updated);
   }
 
   function removeSkill(idx) {
@@ -201,7 +212,7 @@ export default function RequestModal({ isOpen, onClose, onSuccess }) {
               >
                 {applications.map((app) => (
                   <option key={app.id} value={app.id}>
-                    {app.candidateName} — {app.jobTitle}
+                    [{app.candidateNumber}] {app.candidateName} — {app.jobTitle} (Waiting for Request)
                   </option>
                 ))}
               </select>
@@ -326,24 +337,36 @@ export default function RequestModal({ isOpen, onClose, onSuccess }) {
               {skills.map((s, idx) => (
                 <div
                   key={idx}
-                  className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-sky-50 border border-sky-200 text-xs font-semibold text-slate-800"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-xs font-semibold text-slate-800"
                 >
                   <span>{s.name}</span>
-                  <span className="text-[10px] text-brand-700 bg-white px-1 rounded border border-sky-100">
-                    {Math.round(s.weight * 100)}%
-                  </span>
+                  <select
+                    value={s.weight}
+                    onChange={(e) => updateSkillWeight(idx, parseFloat(e.target.value))}
+                    className="text-[11px] font-bold text-brand-700 bg-white px-1 py-0.5 rounded border border-sky-200 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    title="Change skill weight"
+                  >
+                    <option value={1.0}>100%</option>
+                    <option value={0.9}>90%</option>
+                    <option value={0.8}>80%</option>
+                    <option value={0.7}>70%</option>
+                    <option value={0.6}>60%</option>
+                    <option value={0.5}>50%</option>
+                    <option value={0.4}>40%</option>
+                    <option value={0.3}>30%</option>
+                  </select>
                   <button
                     type="button"
                     onClick={() => removeSkill(idx)}
                     className="text-slate-400 hover:text-rose-600 transition"
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <input
                 type="text"
                 value={newSkillName}
@@ -354,13 +377,28 @@ export default function RequestModal({ isOpen, onClose, onSuccess }) {
                     addSkill();
                   }
                 }}
-                className="input text-xs"
+                className="input text-xs flex-1"
                 placeholder="Add skill (e.g. System Design, Microservices, React)..."
               />
+              <select
+                value={newSkillWeight}
+                onChange={(e) => setNewSkillWeight(parseFloat(e.target.value))}
+                className="input text-xs w-24 py-2 font-semibold cursor-pointer"
+                title="Select weight for added skill"
+              >
+                <option value={1.0}>100%</option>
+                <option value={0.9}>90%</option>
+                <option value={0.8}>80%</option>
+                <option value={0.7}>70%</option>
+                <option value={0.6}>60%</option>
+                <option value={0.5}>50%</option>
+                <option value={0.4}>40%</option>
+                <option value={0.3}>30%</option>
+              </select>
               <button
                 type="button"
                 onClick={addSkill}
-                className="btn-secondary text-xs px-3 shrink-0"
+                className="btn-secondary text-xs px-3 shrink-0 py-2"
               >
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add
               </button>

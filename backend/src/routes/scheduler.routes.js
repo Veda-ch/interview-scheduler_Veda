@@ -30,16 +30,12 @@ router.post(
   validateBody(
     z.object({
       requestId: z.string().min(5),
-      simulate: z.boolean().default(true),
       persist: z.boolean().default(true),
     })
   ),
   asyncHandler(async (req, res) => {
     const started = Date.now();
-    const result = await generateProposals(req.body.requestId, {
-      simulate: req.body.simulate,
-      persist: req.body.persist,
-    });
+    const result = await generateProposals(req.body.requestId, { persist: req.body.persist });
 
     await auditFromRequest(req, {
       action: AUDIT_ACTIONS.SLOTS_GENERATED,
@@ -194,177 +190,6 @@ router.post(
   })
 );
 
-/**
- * DIGITAL TWIN: run disruption scenarios against arbitrary candidate schedules
- * and compare their resilience. Accepts either proposal ids or an interview id.
- */
-router.post(
-  '/simulate',
-  requireRole(ROLES.RECRUITER, ROLES.ADMIN),
-  validateBody(
-    z.object({
-      proposalIds: z.array(z.string()).max(10).optional(),
-      interviewId: z.string().optional(),
-      iterations: z.coerce.number().int().min(10).max(5000).optional(),
-      seed: z.coerce.number().int().optional(),
-    })
-  ),
-  asyncHandler(async (req, res) => {
-    const settings = await getSettings();
-    const iterations = req.body.iterations || settings[SETTING_KEYS.SIMULATION_ITERATIONS] || 200;
-    const { computeWorkloadBulk } = await import('../services/interviewer.service.js');
-
-    const schedules = [];
-    const labels = new Map();
-
-    if (req.body.proposalIds?.length) {
-      const proposals = await prisma.slotProposal.findMany({
-        where: { id: { in: req.body.proposalIds } },
-        include: { request: { include: { application: { include: { candidate: { include: { user: true } } } } } } },
-      });
-      if (!proposals.length) throw notFound('No matching proposals');
-
-      const allInterviewerIds = [...new Set(proposals.flatMap((p) => p.interviewerIdsCsv.split(',').filter(Boolean)))];
-      const loads = await computeWorkloadBulk(allInterviewerIds);
-      const profiles = await prisma.interviewerProfile.findMany({
-        where: { id: { in: allInterviewerIds } },
-        include: { user: { select: { timezone: true, name: true } } },
-      });
-      const byId = new Map(profiles.map((p) => [p.id, p]));
-
-      for (const p of proposals) {
-        const ids = p.interviewerIdsCsv.split(',').filter(Boolean);
-        const downstream = await prisma.interviewRequest.count({
-          where: { applicationId: p.request.applicationId, roundNumber: { gt: p.request.roundNumber } },
-        });
-        labels.set(p.id, `Rank ${p.rank}: ${new Date(p.startUtc).toISOString()}`);
-        schedules.push({
-          id: p.id,
-          start_utc: p.startUtc.toISOString(),
-          end_utc: p.endUtc.toISOString(),
-          buffer_minutes: p.request.bufferMinutes,
-          panel: ids.map((id) => ({
-            id,
-            utilization: loads.get(id)?.utilization ?? 0,
-            timezone: byId.get(id)?.user.timezone || 'UTC',
-            backup_count: 2,
-          })),
-          candidate_timezone: p.request.application.candidate.user.timezone,
-          days_out: Math.max(0, (p.startUtc - Date.now()) / 86400000),
-          downstream_interviews: downstream,
-        });
-      }
-    } else if (req.body.interviewId) {
-      const iv = await prisma.interview.findUnique({
-        where: { id: req.body.interviewId },
-        include: {
-          panel: { include: { interviewer: { include: { user: true } } } },
-          request: { include: { application: { include: { candidate: { include: { user: true } } } } } },
-        },
-      });
-      if (!iv) throw notFound('Interview not found');
-      const loads = await computeWorkloadBulk(iv.panel.map((p) => p.interviewerId));
-      const downstream = await prisma.interviewRequest.count({
-        where: { applicationId: iv.request.applicationId, roundNumber: { gt: iv.request.roundNumber } },
-      });
-      labels.set(iv.id, 'Current schedule');
-      schedules.push({
-        id: iv.id,
-        start_utc: iv.startUtc.toISOString(),
-        end_utc: iv.endUtc.toISOString(),
-        buffer_minutes: iv.request.bufferMinutes,
-        panel: iv.panel.map((p) => ({
-          id: p.interviewerId,
-          utilization: loads.get(p.interviewerId)?.utilization ?? 0,
-          timezone: p.interviewer.user.timezone,
-          backup_count: 2,
-        })),
-        candidate_timezone: iv.request.application.candidate.user.timezone,
-        days_out: Math.max(0, (iv.startUtc - Date.now()) / 86400000),
-        downstream_interviews: downstream,
-      });
-    } else {
-      throw badRequest('Provide either proposalIds or an interviewId to simulate');
-    }
-
-    const aiRes = await callAiService('/schedule/simulate', { schedules, iterations, seed: req.body.seed }, { timeoutMs: 20000 });
-    if (!aiRes.ok) {
-      return res.status(503).json({
-        error: {
-          code: 'SIMULATION_UNAVAILABLE',
-          message: 'The simulation service is unavailable. Heuristic health scores are still available.',
-          details: { reason: aiRes.error },
-        },
-      });
-    }
-
-    const results = aiRes.data.results.map((r) => ({ ...r, label: labels.get(r.id) || r.id }));
-
-    // Persist so analytics can report on simulation coverage.
-    for (const r of results) {
-      const proposal = req.body.proposalIds?.includes(r.id)
-        ? await prisma.slotProposal.findUnique({ where: { id: r.id } })
-        : null;
-      await prisma.scheduleSimulation.create({
-        data: {
-          requestId: proposal?.requestId ?? null,
-          interviewId: req.body.interviewId ?? null,
-          label: r.label,
-          iterations: aiRes.data.iterations,
-          resilienceScore: r.resilience_score,
-          meanDisruption: r.mean_disruption,
-          p95Disruption: r.p95_disruption,
-          recoveryRate: r.recovery_rate,
-          scenariosJson: stringifyJson(r.scenarios),
-          seed: aiRes.data.seed,
-        },
-      });
-      if (proposal) {
-        await prisma.slotProposal.update({ where: { id: r.id }, data: { resilienceScore: r.resilience_score } });
-      }
-    }
-
-    await auditFromRequest(req, {
-      action: AUDIT_ACTIONS.SIMULATION_RUN,
-      entity: req.body.interviewId ? 'Interview' : 'InterviewRequest',
-      entityId: req.body.interviewId || schedules[0]?.id,
-      summary: `Monte-Carlo simulation: ${aiRes.data.iterations} iterations across ${results.length} schedule(s)`,
-      metadata: { results: results.map((r) => ({ label: r.label, resilience: r.resilience_score })) },
-    });
-
-    const best = [...results].sort((a, b) => b.resilience_score - a.resilience_score)[0];
-
-    res.json({
-      results,
-      iterations: aiRes.data.iterations,
-      seed: aiRes.data.seed,
-      method: 'monte-carlo',
-      recommendation: best
-        ? {
-            id: best.id,
-            label: best.label,
-            resilienceScore: best.resilience_score,
-            why: `Highest simulated resilience (${best.resilience_score}/100); ${Math.round(best.recovery_rate * 100)}% of sampled disruptions were auto-recoverable. Most likely disruption: ${best.worst_scenario}.`,
-          }
-        : null,
-      disclaimer:
-        'Resilience is a Monte-Carlo estimate over stated hazard assumptions, not a trained prediction model. See GET /api/scheduler/simulation-assumptions.',
-    });
-  })
-);
-
-/** Transparency endpoint: the simulator's full assumption set. */
-router.get(
-  '/simulation-assumptions',
-  asyncHandler(async (_req, res) => {
-    const aiRes = await callAiService('/schedule/simulation-assumptions', undefined, { method: 'GET', timeoutMs: 5000 });
-    if (!aiRes.ok) {
-      return res.status(503).json({ error: { code: 'AI_UNAVAILABLE', message: 'Simulation service unavailable' } });
-    }
-    res.json(aiRes.data);
-  })
-);
-
 /** Current scoring policy - what the numbers on screen actually mean. */
 router.get(
   '/weights',
@@ -401,7 +226,6 @@ router.get(
         endUtc: r.endUtc,
         score: r.score,
         riskScore: r.riskScore,
-        resilienceScore: r.resilienceScore,
         status: r.status,
         engineUsed: r.engineUsed,
         expiresAt: r.expiresAt,

@@ -71,6 +71,7 @@ const updateSchema = z.object({
   yearsExperience: z.coerce.number().min(0).max(60).optional(),
   bioText: z.string().trim().max(1000).nullable().optional(),
   isActive: z.boolean().optional(),
+  autoAcceptEnabled: z.boolean().optional(),
   interviewTypes: z.array(z.enum(INTERVIEW_TYPE_VALUES)).min(1).max(5).optional(),
   workingHours: z
     .object({

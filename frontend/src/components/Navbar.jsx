@@ -7,6 +7,9 @@ import {
   Calendar,
   Layers,
   Sparkles,
+  Briefcase,
+  Award,
+  Trophy,
   ShieldAlert,
   BarChart3,
   Clock,
@@ -32,9 +35,9 @@ export default function Navbar() {
   useEffect(() => {
     async function checkUnread() {
       try {
-        const list = await api.get('/notifications?take=20');
-        const count = (list || []).filter((n) => n.status !== 'READ').length;
-        setUnreadCount(count);
+        // The API returns { items, unread } - trust the server's unread count.
+        const data = await api.get('/notifications?take=20');
+        setUnreadCount(data?.unread ?? 0);
       } catch {
         // silently ignore on mount
       }
@@ -93,7 +96,7 @@ export default function Navbar() {
                   </span>
                 </span>
                 <p className="text-[11px] font-medium text-slate-500 hidden sm:block">
-                  AI Orchestration & Self-Healing Scheduler
+                  Constraint Scheduling & Self-Healing Control Tower
                 </p>
               </div>
             </div>
@@ -115,6 +118,19 @@ export default function Navbar() {
                   >
                     <Layers className="h-4 w-4 text-sky-600" />
                     Pipeline & Requests
+                  </NavLink>
+                  <NavLink
+                    to="/jobs"
+                    className={({ isActive }) =>
+                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        isActive
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                      }`
+                    }
+                  >
+                    <Briefcase className="h-4 w-4 text-indigo-600" />
+                    Jobs & Skills
                   </NavLink>
                   <NavLink
                     to="/builder"
@@ -154,6 +170,19 @@ export default function Navbar() {
                   >
                     <ShieldAlert className="h-4 w-4 text-rose-600" />
                     Control Tower
+                  </NavLink>
+                  <NavLink
+                    to="/evaluations"
+                    className={({ isActive }) =>
+                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        isActive
+                          ? 'bg-amber-100 text-amber-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                      }`
+                    }
+                  >
+                    <Trophy className="h-4 w-4 text-amber-600" />
+                    Evaluations
                   </NavLink>
                   <NavLink
                     to="/analytics"
@@ -231,6 +260,32 @@ export default function Navbar() {
                   >
                     <Users className="h-4 w-4 text-purple-600" />
                     Assigned Interviews
+                  </NavLink>
+                  <NavLink
+                    to="/interviewer/profile"
+                    className={({ isActive }) =>
+                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        isActive
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                      }`
+                    }
+                  >
+                    <Award className="h-4 w-4 text-brand-600" />
+                    My Skills & Availability
+                  </NavLink>
+                  <NavLink
+                    to="/calendar"
+                    className={({ isActive }) =>
+                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        isActive
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
+                      }`
+                    }
+                  >
+                    <Calendar className="h-4 w-4 text-emerald-600" />
+                    My Calendar
                   </NavLink>
                 </>
               )}

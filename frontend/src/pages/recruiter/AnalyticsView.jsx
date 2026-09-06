@@ -44,33 +44,39 @@ export default function AnalyticsView() {
     try {
       const [util, health, funnel, logs] = await Promise.all([
         api.get('/analytics/interviewer-utilization').catch(() => []),
-        api.get('/analytics/health-distribution').catch(() => []),
-        api.get('/analytics/funnel').catch(() => []),
-        api.get('/audit-logs?take=50').catch(() => []),
+        api.get('/analytics/health-distribution').catch(() => null),
+        api.get('/analytics/funnel').catch(() => null),
+        api.get('/audit-logs?take=50').catch(() => null),
       ]);
 
+      // /interviewer-utilization returns a bare array of shaped interviewers.
       setUtilizationData(
         (util || []).map((u) => ({
           name: u.name?.split(' ')[0] || 'Interviewer',
-          interviews: u.weeklyInterviewCount || u.upcomingCount || 3,
-          max: u.maxPerWeek || 10,
+          interviews: u.upcomingCount ?? 0,
+          max: u.maxPerWeek ?? 10,
         }))
       );
 
-      setHealthData(health || [
-        { name: 'Optimal (80-100)', count: 18 },
-        { name: 'Fair (60-79)', count: 6 },
-        { name: 'At Risk (<60)', count: 2 },
-      ]);
+      // /health-distribution returns { buckets: [{ range, count }], total, worst }.
+      setHealthData(
+        (health?.buckets || []).map((b) => ({ name: b.range, count: b.count }))
+      );
 
-      setFunnelData(funnel || [
-        { stage: 'Screening', count: 24 },
-        { stage: 'Technical', count: 16 },
-        { stage: 'Managerial', count: 9 },
-        { stage: 'Offer', count: 4 },
-      ]);
+      // /funnel returns a keyed object, not chart rows - project it into stages.
+      setFunnelData(
+        funnel
+          ? [
+              { stage: 'Applications', count: funnel.applications ?? 0 },
+              { stage: 'Rounds Requested', count: funnel.roundsRequested ?? 0 },
+              { stage: 'Interviews Scheduled', count: funnel.interviewsScheduled ?? 0 },
+              { stage: 'Completed', count: funnel.byStatus?.COMPLETED ?? 0 },
+            ]
+          : []
+      );
 
-      setAuditLogs(logs || []);
+      // /audit-logs returns { total, items }.
+      setAuditLogs(logs?.items || []);
     } catch (err) {
       console.error('Failed to load analytics:', err);
     } finally {
@@ -140,7 +146,7 @@ export default function AnalyticsView() {
               <h3 className="text-sm font-bold text-slate-900">Schedule Health Distribution</h3>
               <p className="text-[11px] text-slate-500">Calculated composite schedule health</p>
             </div>
-            <span className="chip chip-green">Resilience Score</span>
+            <span className="chip chip-green">Heuristic</span>
           </div>
           <div className="h-64 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
@@ -179,7 +185,7 @@ export default function AnalyticsView() {
             <div>
               <h3 className="text-base font-bold text-slate-900">Immutable Audit Trail</h3>
               <p className="text-xs text-slate-500">
-                Logged user, system & AI scheduler events with actor stamps
+                Logged user, system & scheduler events with actor stamps
               </p>
             </div>
           </div>

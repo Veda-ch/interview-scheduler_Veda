@@ -9,6 +9,7 @@ import {
   interviewerUtilization,
   pipelineFunnel,
   healthDistribution,
+  candidateEvaluations,
 } from '../services/analytics.service.js';
 import { ROLES } from '../../../shared/constants.js';
 
@@ -37,5 +38,11 @@ router.get(
 router.get('/funnel', asyncHandler(async (_req, res) => res.json(await pipelineFunnel())));
 
 router.get('/health-distribution', asyncHandler(async (_req, res) => res.json(await healthDistribution())));
+
+/** AI-analysed feedback per candidate, ranked for side-by-side comparison. */
+router.get(
+  '/candidate-evaluations',
+  asyncHandler(async (_req, res) => res.json(await candidateEvaluations()))
+);
 
 export default router;

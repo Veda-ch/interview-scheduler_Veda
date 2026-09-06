@@ -18,6 +18,9 @@ import {
   RefreshCw,
   Search,
   Filter,
+  Users,
+  UserCheck,
+  X,
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
@@ -25,8 +28,11 @@ export default function PipelineDashboard() {
   const [requests, setRequests] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [pulledCandidates, setPulledCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPullModalOpen, setIsPullModalOpen] = useState(false);
+  const [selectedApplicationId, setSelectedApplicationId] = useState(null);
   const [activeTab, setActiveTab] = useState('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
@@ -38,14 +44,16 @@ export default function PipelineDashboard() {
   async function loadDashboardData() {
     setLoading(true);
     try {
-      const [reqData, intData, incData] = await Promise.all([
+      const [reqData, intData, incData, candData] = await Promise.all([
         api.get('/interview-requests').catch(() => []),
         api.get('/interviews?take=30').catch(() => []),
         api.get('/control-tower/incidents?status=OPEN').catch(() => []),
+        api.get('/candidates?take=50').catch(() => []),
       ]);
       setRequests(reqData || []);
       setInterviews(intData || []);
       setIncidents(incData || []);
+      setPulledCandidates(candData?.items || candData || []);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -67,12 +75,12 @@ export default function PipelineDashboard() {
   function getStatusChip(status) {
     switch (status) {
       case 'PENDING':
-        return <span className="chip chip-amber">Pending Matching</span>;
+        return <span className="chip chip-amber font-semibold">Awaiting Candidate Slots</span>;
       case 'PROPOSED':
-        return <span className="chip chip-purple">Slots Proposed</span>;
+        return <span className="chip chip-purple font-bold">Slots Submitted (Ready for Matching)</span>;
       case 'SCHEDULED':
       case 'CONFIRMED':
-        return <span className="chip chip-green">Scheduled & Booked</span>;
+        return <span className="chip chip-green font-bold">Scheduled & Booked</span>;
       case 'COMPLETED':
         return <span className="chip chip-blue">Completed</span>;
       case 'CANCELLED':
@@ -120,7 +128,16 @@ export default function PipelineDashboard() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => setIsPullModalOpen(true)}
+            className="btn-secondary text-xs py-2.5 px-4 shadow-xs flex items-center gap-2 border-sky-200 text-sky-900 bg-sky-50 hover:bg-sky-100 font-bold"
+          >
+            <UserCheck className="h-4 w-4 text-sky-600" /> Pull Candidates ({pulledCandidates.length})
+          </button>
+          <button
+            onClick={() => {
+              setSelectedApplicationId(null);
+              setIsModalOpen(true);
+            }}
             className="btn-primary text-xs py-2.5 px-4 shadow-md shadow-brand-500/20 flex items-center gap-2"
           >
             <Plus className="h-4 w-4" /> Create Interview Request
@@ -192,23 +209,25 @@ export default function PipelineDashboard() {
           </p>
         </div>
 
-        {/* Card 4: Algorithmic Health */}
+        {/* Card 4: Booked interviews (counted from real rows, not estimated) */}
         <div className="card p-5 bg-white border border-sky-100/90 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Mean Resilience
+              Booked Interviews
             </span>
             <div className="p-2.5 rounded-xl bg-purple-100 text-purple-700">
               <Sparkles className="h-5 w-5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">89.4%</span>
+            <span className="text-3xl font-extrabold text-slate-900">{interviews.length}</span>
             <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
-              CP-SAT + Monte Carlo
+              CP-SAT solver
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-2">Multi-hazard disruption survivability</p>
+          <p className="text-xs text-slate-500 mt-2">
+            {interviews.filter((i) => i.status === 'CONFIRMED').length} confirmed by the candidate
+          </p>
         </div>
       </div>
 
@@ -380,15 +399,15 @@ export default function PipelineDashboard() {
                         <td className="td">
                           <div className="flex items-center gap-3">
                             <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                              {iv.request?.application?.candidate?.user?.name?.charAt(0) || 'C'}
+                              {iv.candidate?.name?.charAt(0) || 'C'}
                             </div>
                             <div>
                               <span className="font-bold text-slate-900 text-sm block">
-                                {iv.request?.roundName || 'Interview'}
+                                {iv.round?.name || 'Interview'}
                               </span>
                               <span className="text-xs text-slate-500 font-medium">
-                                {iv.request?.application?.candidate?.user?.name} •{' '}
-                                {iv.request?.application?.job?.title}
+                                {iv.candidate?.name} •{' '}
+                                {iv.job?.title}
                               </span>
                             </div>
                           </div>
@@ -408,7 +427,7 @@ export default function PipelineDashboard() {
                                 key={idx}
                                 className="text-xs font-semibold bg-sky-50 text-brand-800 border border-sky-200 px-2 py-0.5 rounded-md"
                               >
-                                {p.interviewer?.user?.name || 'Panelist'}
+                                {p.name || 'Panelist'}
                               </span>
                             ))}
                           </div>
@@ -448,11 +467,127 @@ export default function PipelineDashboard() {
       {/* Modal for Creating Interview Request */}
       <RequestModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        initialApplicationId={selectedApplicationId}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedApplicationId(null);
+        }}
         onSuccess={() => {
           loadDashboardData();
         }}
       />
+
+      {/* Pull Candidates Roster Modal */}
+      {isPullModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden border border-sky-100 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-sky-100 bg-sky-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-sky-100 text-sky-700 rounded-xl">
+                  <Users className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Pulled Candidates Roster</h2>
+                  <p className="text-xs text-slate-500">
+                    Showing candidates pulled and waiting for interview request assignment
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPullModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Table Body */}
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-600 bg-sky-50 px-4 py-2.5 rounded-xl border border-sky-100">
+                <span>
+                  Total Candidates Pulled:{' '}
+                  <strong className="text-brand-700 font-extrabold">{pulledCandidates.length}</strong>
+                </span>
+                <span className="text-sky-700 font-semibold bg-sky-100 px-2 py-0.5 rounded-md border border-sky-200">
+                  Ready for Interview Request
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">Candidate No</th>
+                      <th className="py-3 px-4">Candidate Name</th>
+                      <th className="py-3 px-4">Role Applied To</th>
+                      <th className="py-3 px-4">Required / Key Skills</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {pulledCandidates.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-8 text-slate-400">
+                          No pulled candidates found.
+                        </td>
+                      </tr>
+                    ) : (
+                      pulledCandidates.map((c) => {
+                        const cNumber = c.candidateNumber || `CND-${(c.id || '').slice(-4).toUpperCase()}`;
+                        const app = c.applications?.[0];
+                        const jobTitle = app?.jobTitle || c.headline || 'Senior Software Engineer';
+                        const skillList = (c.skills || []).map((s) => s.name || s.skill?.name || s).filter(Boolean);
+
+                        return (
+                          <tr key={c.id} className="hover:bg-sky-50/50 transition">
+                            <td className="py-3 px-4">
+                              <span className="font-mono bg-sky-100 text-sky-800 font-bold px-2 py-1 rounded-md text-[11px] border border-sky-200">
+                                {cNumber}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-900">
+                              {c.name}
+                            </td>
+                            <td className="py-3 px-4 font-medium text-slate-700">
+                              {jobTitle}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {skillList.slice(0, 4).map((sk, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border text-[10px] font-semibold border-slate-200"
+                                  >
+                                    {sk}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                onClick={() => {
+                                  setIsPullModalOpen(false);
+                                  setSelectedApplicationId(app?.id || null);
+                                  setIsModalOpen(true);
+                                }}
+                                className="btn-primary text-[11px] py-1.5 px-3 shadow-xs inline-flex items-center gap-1"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Create Request
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

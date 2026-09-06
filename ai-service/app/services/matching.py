@@ -1,19 +1,173 @@
-"""Semantic skill matching.
+"""Skill matching.
 
-Combines three signals, in decreasing order of trust:
+`match_skills_llm` is the primary path: deciding whether an interviewer's
+"PostgreSQL" experience covers a "SQL" requirement is a judgement about meaning,
+which is what a language model is for. It returns a per-skill breakdown with the
+model's own reasoning so the recruiter can see why someone ranked where they did.
+
+`match_skills` below it is the deterministic fallback, combining three signals in
+decreasing order of trust:
   1. canonical identity   (ontology says these are the same skill)     -> 1.00
   2. ontology adjacency   ("SQL Optimization" is adjacent to "SQL")    -> 0.60
   3. embedding similarity (lexical by default, neural if installed)    -> <= 0.50
 
-Never an LLM: a hallucinated "yes, they match" would silently staff an
-unqualified interviewer. This is a place for determinism.
+It runs whenever the model is unavailable or returns something unusable, so a
+missing LLM degrades the explanation, never the ability to staff a panel.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from ..providers.base import structured_call
 from ..providers.embeddings import get_embedding_provider, semantic_skill_similarity
+from ..providers.llm_providers import get_provider
+from ..config import get_settings
+from ..schemas import SkillMatchAnalysis
 from .extractors import canonicalize
+
+log = logging.getLogger("ai.matching")
+
+
+def _describe(items: list[Any], keys: tuple[str, ...]) -> str:
+    out: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            out.append(str(item))
+            continue
+        bits = [f"{item.get(k)}" for k in keys if item.get(k) not in (None, "")]
+        out.append(" ".join(bits))
+    return "; ".join(out)
+
+
+def match_skills_llm(required: list[dict[str, Any]], offered: list[dict[str, Any]]) -> dict[str, Any]:
+    """LLM skill-coverage judgement, with the deterministic matcher as fallback.
+
+    The return shape is identical to `match_skills` so every caller works
+    unchanged; extra keys report which path produced the answer.
+    """
+    required = required or []
+    offered = offered or []
+
+    deterministic = lambda: match_skills(required, offered)  # noqa: E731
+
+    if not required:
+        det = deterministic()
+        return {**det, "used_llm": False, "provider": "deterministic", "fallback_used": False, "warning": None}
+
+    prompt = (
+        "You are assessing whether an interviewer is qualified to assess a "
+        "candidate for a role. For EACH required skill, decide how well the "
+        "interviewer's own skills cover it.\n"
+        "coverage is 0-100: 100 = the same skill or clearly deeper; 60-90 = "
+        "closely adjacent (e.g. 'PostgreSQL' covers 'SQL'); 1-40 = loosely "
+        "related; 0 = not covered at all. covered_by is the interviewer skill "
+        "you matched it to, or an empty string when nothing covers it. Put any "
+        "must-have requirement scoring under 50 in unmet_must_haves. overall is "
+        "the weighted 0-100 result across all requirements. Judge only from the "
+        "skills listed - never assume knowledge that is not written down.\n\n"
+        f"REQUIRED BY THE ROLE (name, weight, must_have):\n"
+        f"{_describe(required, ('name', 'weight', 'mustHave'))}\n\n"
+        f"INTERVIEWER'S DECLARED SKILLS (name, proficiency out of 5, years):\n"
+        f"{_describe(offered, ('name', 'proficiency', 'years'))}"
+    )
+
+    def _fallback() -> SkillMatchAnalysis:
+        det = deterministic()
+        return SkillMatchAnalysis(
+            overall=int(round(det["overall"])),
+            per_skill=[
+                {
+                    "required": p["skill"],
+                    "covered_by": p.get("matched_with") or "",
+                    "coverage": int(round(p["score"])),
+                    "reason": det["method"],
+                }
+                for p in det["per_skill"]
+            ],
+            unmet_must_haves=det["unmet_must_haves"],
+            summary="Deterministic ontology and lexical similarity.",
+        )
+
+    result, meta = structured_call(
+        get_provider(), prompt, SkillMatchAnalysis,
+        fallback=_fallback,
+        max_retries=get_settings().llm_max_retries,
+    )
+
+    used_llm = bool(meta.get("used_llm")) and not meta.get("fallback_used")
+
+    # The model is trusted for ONE thing: judging whether an offered skill covers
+    # a required one. Everything downstream of that - the weighted total, which
+    # must-haves are unmet - is arithmetic we do ourselves.
+    #
+    # This is not pedantry. Asked directly, the model has returned an `overall`
+    # of 73 while simultaneously reporting both must-have skills unmet, which
+    # would rank an unqualified interviewer alongside a qualified one. Recomputing
+    # the total from its own per-skill judgements keeps the ranking coherent.
+    by_name = {
+        canonicalize(p.required): p
+        for p in result.per_skill
+        if (p.required or "").strip()
+    }
+
+    per_skill: list[dict[str, Any]] = []
+    unmet: list[str] = []
+    weighted_sum = 0.0
+    weight_total = 0.0
+
+    for idx, req in enumerate(required):
+        raw = req.get("name") if isinstance(req, dict) else req
+        name = canonicalize(raw)
+        if not name:
+            continue
+        weight = float(req.get("weight", 0.8)) if isinstance(req, dict) else 0.8
+        must = bool(req.get("mustHave", req.get("must_have", True))) if isinstance(req, dict) else True
+        if must:
+            weight = max(weight, 0.9)
+
+        # Prefer a name match; fall back to positional when the model omitted the
+        # name (small local models frequently do).
+        judged = by_name.get(name)
+        if judged is None and idx < len(result.per_skill):
+            candidate = result.per_skill[idx]
+            if not (candidate.required or "").strip():
+                judged = candidate
+
+        coverage = float(max(0, min(100, judged.coverage))) if judged else 0.0
+        matched = (judged.covered_by or "").strip() if judged else ""
+
+        if must and coverage < 50:
+            unmet.append(name)
+
+        per_skill.append(
+            {
+                "skill": name,
+                "score": round(coverage, 1),
+                "similarity": round(coverage / 100, 3),
+                "matched_with": matched or None,
+                "proficiency": None,
+                "must_have": must,
+                "weight": weight,
+                "reason": (judged.reason if judged else "") or "",
+            }
+        )
+        weighted_sum += coverage * weight
+        weight_total += weight
+
+    overall = (weighted_sum / weight_total) if weight_total else 0.0
+
+    return {
+        "overall": round(overall, 1),
+        "per_skill": per_skill,
+        "unmet_must_haves": unmet,
+        "summary": result.summary,
+        "method": "llm" if used_llm else "ontology-fallback",
+        "used_llm": used_llm,
+        "provider": meta["provider"] if used_llm else "deterministic",
+        "fallback_used": bool(meta.get("fallback_used")),
+        "warning": meta.get("warning"),
+    }
 
 
 def match_skills(required: list[dict[str, Any]], offered: list[dict[str, Any]]) -> dict[str, Any]:

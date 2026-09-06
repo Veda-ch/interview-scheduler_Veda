@@ -19,7 +19,7 @@ import prisma from '../lib/prisma.js';
 import logger from '../lib/logger.js';
 import { slotTaken, notFound, conflict, badRequest, forbidden } from '../lib/errors.js';
 import { addMinutes, humanSlot, timezoneSpreadHours, localMinuteOfDay } from '../lib/time.js';
-import { parseArray, stringifyJson, csvToArray } from '../lib/json.js';
+import { parseArray, parseObject, stringifyJson, csvToArray } from '../lib/json.js';
 import { recordAudit } from './audit.service.js';
 import { notify, interviewContext } from './notification.service.js';
 import { createMeetingSafely } from '../providers/meeting.provider.js';
@@ -38,12 +38,44 @@ import {
   INCIDENT_TYPES,
   SEVERITY,
   SETTING_KEYS,
+  AVAILABILITY_KIND,
 } from '../../../shared/constants.js';
 
 const isPostgres = (process.env.DATABASE_PROVIDER || 'sqlite').toLowerCase().startsWith('postgres');
 
 /** Transaction options: Serializable on Postgres; SQLite is already serialised. */
 const txOptions = isPostgres ? { isolationLevel: 'Serializable', timeout: 15000 } : { timeout: 15000 };
+
+/**
+ * Which interviewers should be seated as ACCEPTED rather than PENDING.
+ *
+ * Auto-accept requires BOTH:
+ *   1. the interviewer opted in (`autoAcceptEnabled`), and
+ *   2. a window they *explicitly declared* AVAILABLE/PREFERRED fully covers the
+ *      slot.
+ *
+ * The second condition is deliberately stricter than the solver's feasibility
+ * rule, which also accepts the profile's default working hours. Working hours
+ * are an assumption; a declared window is a positive statement of consent, and
+ * only consent should skip the approval step.
+ */
+async function resolveAutoAccepted(interviewers, startUtc, endUtc) {
+  const optedIn = interviewers.filter((iv) => iv.autoAcceptEnabled);
+  if (!optedIn.length) return new Set();
+
+  const covering = await prisma.availabilityWindow.findMany({
+    where: {
+      userId: { in: optedIn.map((iv) => iv.userId) },
+      kind: { in: [AVAILABILITY_KIND.AVAILABLE, AVAILABILITY_KIND.PREFERRED] },
+      startUtc: { lte: startUtc },
+      endUtc: { gte: endUtc },
+    },
+    select: { userId: true },
+  });
+
+  const coveredUserIds = new Set(covering.map((w) => w.userId));
+  return new Set(optedIn.filter((iv) => coveredUserIds.has(iv.userId)).map((iv) => iv.id));
+}
 
 /**
  * Re-check that every participant is still free. Runs inside the transaction,
@@ -148,6 +180,12 @@ export async function confirmProposal({ proposalId, actor, autoConfirmCandidate 
 
   const userIds = [candidate.userId, ...interviewers.map((i) => i.userId)];
 
+  // Interviewers who opted into auto-accept AND explicitly declared this time
+  // free are seated as ACCEPTED - the declaration is the approval, so the
+  // interview is scheduled without a round-trip. Everyone else stays PENDING.
+  const autoAcceptedIds = await resolveAutoAccepted(interviewers, proposal.startUtc, proposal.endUtc);
+  const matchScores = parseObject(proposal.matchScoresJson) || {};
+
   // ---------------------------- critical section ----------------------------
   const interview = await prisma.$transaction(async (tx) => {
     // Guard against a second active interview for the same request.
@@ -176,7 +214,6 @@ export async function confirmProposal({ proposalId, actor, autoConfirmCandidate 
         candidateResponse: autoConfirmCandidate ? CANDIDATE_RESPONSE.ACCEPTED : CANDIDATE_RESPONSE.PENDING,
         scheduleScore: proposal.score,
         riskScore: proposal.riskScore,
-        resilienceScore: proposal.resilienceScore,
         reasonsJson: proposal.reasonsJson,
         engineUsed: proposal.engineUsed,
         createdById: actor?.id ?? null,
@@ -184,13 +221,17 @@ export async function confirmProposal({ proposalId, actor, autoConfirmCandidate 
     });
 
     await tx.interviewPanelMember.createMany({
-      data: interviewers.map((iv, idx) => ({
-        interviewId: created.id,
-        interviewerId: iv.id,
-        role: idx === 0 ? 'PRIMARY' : 'SECONDARY',
-        responseStatus: PANEL_RESPONSE.PENDING,
-        matchScore: 0,
-      })),
+      data: interviewers.map((iv, idx) => {
+        const auto = autoAcceptedIds.has(iv.id);
+        return {
+          interviewId: created.id,
+          interviewerId: iv.id,
+          role: idx === 0 ? 'PRIMARY' : 'SECONDARY',
+          responseStatus: auto ? PANEL_RESPONSE.ACCEPTED : PANEL_RESPONSE.PENDING,
+          respondedAt: auto ? new Date() : null,
+          matchScore: matchScores[iv.id] ?? 0,
+        };
+      }),
     });
 
     // Booking rows are the double-booking guard. The unique index on
@@ -230,13 +271,27 @@ export async function confirmProposal({ proposalId, actor, autoConfirmCandidate 
       requestId: request.id,
       score: proposal.score,
       risk: proposal.riskScore,
-      resilience: proposal.resilienceScore,
       engine: proposal.engineUsed,
       interviewers: interviewers.map((i) => i.user.name),
       reasons: parseArray(proposal.reasonsJson),
       reason,
+      autoAcceptedInterviewers: interviewers.filter((i) => autoAcceptedIds.has(i.id)).map((i) => i.user.name),
     },
   });
+
+  // Auto-acceptance is a decision made on someone's behalf, so it gets its own
+  // audit line per interviewer rather than hiding inside the creation metadata.
+  for (const iv of interviewers.filter((i) => autoAcceptedIds.has(i.id))) {
+    await recordAudit({
+      actorUserId: null,
+      actorRole: 'SYSTEM',
+      action: AUDIT_ACTIONS.PANEL_ACCEPTED,
+      entity: 'Interview',
+      entityId: interview.id,
+      summary: `${iv.user.name} auto-accepted (slot falls inside a declared availability window)`,
+      metadata: { interviewerId: iv.id, automatic: true },
+    });
+  }
 
   // ---- Post-commit side effects (each independently failable).
   await attachMeetingAndCalendar(interview.id);
@@ -863,6 +918,12 @@ export async function replaceInterviewer({ interviewId, outgoingInterviewerId, i
 
   const outgoing = interview.panel.find((p) => p.interviewerId === outgoingInterviewerId);
 
+  // A replacement who opted in and already declared this exact time free should
+  // not be asked to approve it either - otherwise an auto-recovery still leaves
+  // a pending seat behind, which is the thing auto-accept exists to avoid.
+  const autoAcceptedIds = await resolveAutoAccepted([incoming], interview.startUtc, interview.endUtc);
+  const incomingAuto = autoAcceptedIds.has(incoming.id);
+
   await prisma.$transaction(async (tx) => {
     await assertNoConflicts(tx, {
       userIds: [incoming.userId],
@@ -881,7 +942,8 @@ export async function replaceInterviewer({ interviewId, outgoingInterviewerId, i
         interviewId,
         interviewerId: incomingInterviewerId,
         role: outgoing?.role || 'PRIMARY',
-        responseStatus: PANEL_RESPONSE.PENDING,
+        responseStatus: incomingAuto ? PANEL_RESPONSE.ACCEPTED : PANEL_RESPONSE.PENDING,
+        respondedAt: incomingAuto ? new Date() : null,
       },
     });
     await tx.booking.create({
@@ -898,8 +960,10 @@ export async function replaceInterviewer({ interviewId, outgoingInterviewerId, i
     action: AUDIT_ACTIONS.RECOVERY_APPLIED,
     entity: 'Interview',
     entityId: interviewId,
-    summary: `${outgoing?.interviewer.user.name || 'A panellist'} replaced by ${incoming.user.name}`,
-    metadata: { reason, outgoingInterviewerId, incomingInterviewerId },
+    summary:
+      `${outgoing?.interviewer.user.name || 'A panellist'} replaced by ${incoming.user.name}` +
+      (incomingAuto ? ' (auto-accepted from their declared availability)' : ''),
+    metadata: { reason, outgoingInterviewerId, incomingInterviewerId, autoAccepted: incomingAuto },
   });
 
   const refreshed = await prisma.interview.findUnique({ where: { id: interviewId }, include: fullInterviewInclude });

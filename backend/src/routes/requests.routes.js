@@ -60,6 +60,7 @@ function shapeRequest(r) {
     latestUtc: r.latestUtc,
     requiredSkills: parseArray(r.requiredSkillsJson),
     focusTopics: parseArray(r.focusTopicsJson),
+    candidateSlots: parseArray(r.candidateSlotsJson),
     priority: r.priority,
     status: r.status,
     failureReason: r.failureReason,
@@ -298,5 +299,73 @@ router.delete(
 
 /** Convenience: the standard round plan, used to pre-fill the builder UI. */
 router.get('/meta/round-plan', (_req, res) => res.json(DEFAULT_ROUND_PLAN));
+
+router.post(
+  '/:id/candidate-slots',
+  validateBody(
+    z.object({
+      slots: z
+        .array(
+          z.object({
+            startUtc: z.string().datetime({ offset: true }),
+            endUtc: z.string().datetime({ offset: true }),
+          })
+        )
+        .min(1)
+        .max(50),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const { slots } = req.body;
+    const request = await prisma.interviewRequest.findUnique({
+      where: { id: req.params.id },
+      include: requestInclude,
+    });
+    if (!request) throw notFound('Interview request not found');
+
+    // Only the candidate this round belongs to (or the recruiter/admin acting
+    // on their behalf) may offer slots for it.
+    if (req.user.role === ROLES.CANDIDATE) {
+      const own = await loadOwnProfile(req);
+      if (request.application.candidateId !== own?.id) throw forbidden('This request is not yours');
+    } else if (![ROLES.RECRUITER, ROLES.ADMIN].includes(req.user.role)) {
+      throw forbidden('Only the candidate or a recruiter can submit slots');
+    }
+
+    for (const slot of slots) {
+      if (new Date(slot.endUtc) <= new Date(slot.startUtc)) {
+        throw badRequest('Each slot must end after it starts');
+      }
+    }
+
+    const candidateUserId = request.application.candidate.userId;
+    for (const slot of slots) {
+      await prisma.availabilityWindow.create({
+        data: {
+          userId: candidateUserId,
+          startUtc: new Date(slot.startUtc),
+          endUtc: new Date(slot.endUtc),
+          kind: 'PREFERRED',
+          sourceTimezone: request.application.candidate.user?.timezone || 'UTC',
+          note: `Preferred slot for ${request.roundName}`,
+        },
+      });
+    }
+
+    // These go in their own column. focusTopicsJson belongs to the adaptive
+    // feedback loop (skill gaps carried from the previous round) and writing
+    // slots there would silently destroy them.
+    const updated = await prisma.interviewRequest.update({
+      where: { id: req.params.id },
+      data: {
+        status: REQUEST_STATUS.PROPOSED,
+        candidateSlotsJson: stringifyJson(slots),
+      },
+      include: requestInclude,
+    });
+
+    res.json({ ok: true, request: shapeRequest(updated) });
+  })
+);
 
 export default router;

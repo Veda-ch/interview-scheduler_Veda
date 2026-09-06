@@ -6,17 +6,16 @@ Most interview tools answer *"is this slot free?"*. This platform answers *"is t
 good, resilient, and likely to survive contact with reality — and what do we do the moment it
 isn't?"*. It is a **modular monolith** (React + Express + Prisma) paired with **one specialised
 Python service** that owns everything mathematical: constraint optimisation (OR-Tools CP-SAT),
-Monte-Carlo disruption simulation, embedding-based skill matching, and all LLM calls. A background
+and all LLM calls. A background
 **Control Tower monitor** watches live interviews, raises incidents, computes cascading impact,
 generates and ranks recovery plans, and applies them under an explicit **autonomy policy**.
 
 ## 2. Guiding principle for intelligence
 
 ```
-AI (LLM)      -> ambiguity and language   (JD parsing, resume parsing, NL availability, feedback analysis, message drafting)
+AI (LLM)      -> meaning and ambiguity    (NL availability, feedback analysis, message drafting, skill-coverage matching)
 Algorithms    -> guarantees               (hard constraints, conflicts, time zones, buffers, RBAC, double-booking)
 Optimization  -> scheduling               (OR-Tools CP-SAT weighted objective over feasible slot/panel assignments)
-Simulation    -> uncertainty              (Monte-Carlo disruption scenarios -> resilience score)
 ```
 
 An LLM never decides a schedule. Every LLM output is parsed into a Pydantic schema, validated,
@@ -48,7 +47,6 @@ flowchart TB
     LLM[AIProvider: Mock, Gemini, Ollama]
     EMB[Embeddings: local lexical+ontology, SentenceTransformers]
     OPT[OR-Tools CP-SAT solver]
-    SIM[Monte-Carlo simulator]
     HEALTH[Schedule health scorer]
   end
 
@@ -62,7 +60,7 @@ flowchart TB
   API -->|HTTP + token + timeout + circuit breaker| AISVC
   API -.->|on AI service failure| FALLBACK
   PROV --> EXT1 & EXT2 & EXT3
-  AISVC --> LLM & EMB & OPT & SIM & HEALTH
+  AISVC --> LLM & EMB & OPT & HEALTH
 ```
 
 **Why a modular monolith plus one AI service (and not 15 microservices):** the scheduling domain is
@@ -84,19 +82,15 @@ sequenceDiagram
   participant M as Meeting
   participant N as Notifications
 
-  R->>B: POST /api/jobs (job description text)
-  B->>AI: POST /ai/analyze-jd
-  AI-->>B: validated skills, experience, type, topics
+  R->>B: POST /api/jobs (title + required skills, entered by the recruiter)
   B->>DB: persist Job and required skills
   R->>B: POST /api/interview-requests
   R->>B: POST /api/scheduler/generate
   B->>DB: load availability, workload, skills, existing bookings
-  B->>AI: POST /match/interviewers (embeddings plus deterministic factors)
-  AI-->>B: ranked interviewers with explanations
+  B->>AI: POST /match/skills (LLM skill-coverage judgement)
+  AI-->>B: per-skill coverage; the weighted total is recomputed in Node
   B->>AI: POST /schedule/solve (hard and soft constraints)
   AI-->>B: recommended slot, panel, score, risk, reasons, alternatives
-  B->>AI: POST /schedule/simulate (Monte-Carlo)
-  AI-->>B: resilience score per candidate slot
   B->>DB: persist SlotProposals and ScheduleScore
   B-->>R: ranked slots with WHY
   R->>B: POST /api/scheduler/confirm
@@ -122,8 +116,7 @@ sequenceDiagram
   MON->>CT: raise Incident (type, severity)
   CT->>DB: impact analysis - affected interview, people, downstream rounds
   CT->>AI: candidate recovery options (replacement interviewers, new slots)
-  CT->>AI: simulate each option to get a disruption score
-  CT->>CT: rank plans, pick recommended, classify risk LOW/MEDIUM/HIGH
+  CT->>CT: order plans by fixed strategy precedence, classify risk LOW/MEDIUM/HIGH
   alt risk is LOW and autonomy policy allows
     CT->>DB: apply recovery automatically
     CT->>R: notify auto-recovered
@@ -163,7 +156,6 @@ erDiagram
   Interview ||--o{ Booking : reserves
   Incident ||--o{ RecoveryPlan : offers
   Incident ||--o{ RecoveryAction : applies
-  InterviewRequest ||--o{ ScheduleSimulation : simulated_by
 ```
 
 **Portability decision:** the Prisma schema deliberately uses no `enum`, no scalar lists and no
@@ -200,7 +192,7 @@ covered by a test that fires concurrent confirmations at the same slot.
 | Control Tower | `backend/src/services/controlTower.service.js`, `monitor.js` | Detect, analyse, recover, autonomy |
 | Providers | `backend/src/providers/*` | Calendar / Meeting / Notification / AI-client abstractions |
 | Optimizer | `ai-service/app/services/optimizer.py` | CP-SAT model, objective weights, explanations |
-| Simulator | `ai-service/app/services/simulator.py` | Monte-Carlo disruption scenarios, resilience |
+| Skill matching | `ai-service/app/services/matching.py` | LLM coverage judgement, ontology fallback |
 | Health scorer | `ai-service/app/services/health.py` | Explainable schedule health breakdown |
 | AI providers | `ai-service/app/providers/*` | Mock / Gemini / Ollama plus embeddings |
 
@@ -214,7 +206,7 @@ covered by a test that fires concurrent confirmations at the same slot.
 | 3 | Profiles, skills, availability |
 | 4 | Jobs, applications, interview requests |
 | 5 | Scheduling engine (OR-Tools plus JS fallback) |
-| 6 | AI integration (JD, resume, NL availability, feedback, messages) |
+| 6 | AI integration (NL availability, feedback analysis, messages, skill matching) |
 | 7-10 | Calendar, meetings, notifications, candidate and interviewer flows |
-| 11-14 | Adaptive pipeline, Control Tower, digital twin, analytics and audit |
+| 11-14 | Adaptive pipeline, Control Tower, analytics and audit |
 | 15-18 | Edge cases, security, tests, polish, hackathon package |

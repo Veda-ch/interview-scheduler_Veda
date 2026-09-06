@@ -26,10 +26,11 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
   async function loadNotifications() {
     setLoading(true);
     try {
+      // The API returns { items, unread } - not a bare array.
       const data = await api.get('/notifications?take=25');
-      setNotifications(data || []);
-      const unread = (data || []).filter((n) => n.status !== 'READ').length;
-      onCountChange?.(unread);
+      const items = data?.items || [];
+      setNotifications(items);
+      onCountChange?.(data?.unread ?? items.filter((n) => n.status !== 'READ').length);
     } catch (err) {
       console.error('Failed to load notifications:', err);
     } finally {
@@ -39,7 +40,7 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
 
   async function markAsRead(id) {
     try {
-      await api.post(`/notifications/${id}/read`);
+      await api.post('/notifications/read', { ids: [id] });
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, status: 'READ' } : n))
       );

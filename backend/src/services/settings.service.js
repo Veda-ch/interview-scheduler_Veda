@@ -17,7 +17,6 @@ export const DEFAULT_SETTINGS = {
   [SETTING_KEYS.SLOT_GRANULARITY_MINUTES]: { value: config.scheduling.slotGranularityMinutes, valueType: 'INT', description: 'Candidate slot start alignment, in minutes.' },
   [SETTING_KEYS.DEFAULT_WORK_START_MINUTE]: { value: 540, valueType: 'INT', description: 'Default working-day start (minutes after local midnight).' },
   [SETTING_KEYS.DEFAULT_WORK_END_MINUTE]: { value: 1080, valueType: 'INT', description: 'Default working-day end (minutes after local midnight).' },
-  [SETTING_KEYS.SIMULATION_ITERATIONS]: { value: config.scheduling.simulationIterations, valueType: 'INT', description: 'Monte-Carlo iterations per schedule resilience run.' },
   [SETTING_KEYS.AUTONOMY_AUTO_APPLY_MAX_RISK]: { value: config.scheduling.autonomyMaxRisk, valueType: 'STRING', description: 'Highest recovery risk level the Control Tower may apply without human approval (LOW|MEDIUM|HIGH).' },
   [SETTING_KEYS.MAX_PROPOSALS]: { value: 5, valueType: 'INT', description: 'How many ranked slot proposals to return per request.' },
   [SETTING_KEYS.PROPOSAL_TTL_HOURS]: { value: 48, valueType: 'INT', description: 'Hours before an unaccepted slot proposal expires.' },

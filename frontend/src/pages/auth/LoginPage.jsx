@@ -28,7 +28,7 @@ const ROLES = [
     id: 'RECRUITER',
     title: 'Recruiter',
     tagline: 'Talent Acquisition & Ops',
-    description: 'Post interview requests, automate candidate scheduling & monitor the AI Control Tower.',
+    description: 'Post interview requests, automate candidate scheduling & monitor the Control Tower.',
     icon: Briefcase,
     color: 'from-blue-600 to-sky-500',
     accentBg: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -210,7 +210,7 @@ export default function LoginPage() {
             Smart Interview Scheduler
           </h1>
           <p className="mt-1 text-sm text-slate-600 font-medium">
-            AI-Driven Multi-Persona Scheduling & Control Tower
+            Constraint-Based Multi-Persona Scheduling & Control Tower
           </p>
         </div>
 

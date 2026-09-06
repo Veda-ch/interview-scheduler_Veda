@@ -75,14 +75,9 @@ export default function ScheduleBuilder() {
       });
       setMatchData(matchRes);
 
-      // Check if proposals already exist in DB for this request
-      const existing = await api.get(`/candidates/${req.applicationId || req.application?.candidateId || 'me'}/proposals`).catch(() => []);
-      const forThisReq = (existing || []).filter((p) => p.requestId === reqId);
-      if (forThisReq.length > 0) {
-        setProposals(forThisReq);
-      } else {
-        setProposals([]);
-      }
+      // Re-render previously generated proposals without re-running the solver.
+      const existing = await api.get(`/scheduler/proposals/${reqId}`).catch(() => []);
+      setProposals(existing || []);
     } catch (err) {
       console.error('Failed to load request details:', err);
       setError(err.message || 'Error loading request');
@@ -99,7 +94,6 @@ export default function ScheduleBuilder() {
     try {
       const result = await api.post('/scheduler/generate', {
         requestId: selectedRequestId,
-        simulate: true,
         persist: true,
       });
 
@@ -150,7 +144,7 @@ export default function ScheduleBuilder() {
                 Automated Schedule Optimizer & Builder
               </h1>
               <p className="text-xs text-slate-500 font-medium">
-                Minimum Deliverables 2 & 4 • OR-Tools CP-SAT Solver with Monte-Carlo Digital Twin
+                OR-Tools CP-SAT solver over slots that already satisfy every hard constraint
               </p>
             </div>
           </div>
@@ -320,7 +314,7 @@ export default function ScheduleBuilder() {
           </div>
         </div>
 
-        {/* Right Column: AI Proposals & Simulation (8 Cols) */}
+        {/* Right Column: solver proposals (8 Cols) */}
         <div className="lg:col-span-8 space-y-4">
           <div className="card p-5 bg-white border border-sky-100 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-sky-50">
@@ -393,11 +387,6 @@ export default function ScheduleBuilder() {
                           Score: {Math.round(prop.score || 88)}%
                         </span>
 
-                        {prop.resilienceScore != null && (
-                          <span className="text-[11px] font-semibold text-purple-800 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">
-                            Resilience: {Math.round(prop.resilienceScore * 100)}%
-                          </span>
-                        )}
                       </div>
 
                       {/* Confirm & Book CTA */}

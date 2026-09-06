@@ -5,10 +5,8 @@ the schedule. The overall score is their weighted mean. Every number that goes
 into it is returned in `breakdown`, so the UI can show the arithmetic rather
 than a mysterious "93".
 
-Terminology we hold ourselves to:
-  * health_score      -> heuristic, computed here, deterministic
-  * resilience_score  -> simulated, computed by simulator.py, stochastic
-They are reported separately and never conflated.
+health_score is a deterministic heuristic computed here. It is not a
+prediction, not a model output, and is never described as one.
 """
 from __future__ import annotations
 

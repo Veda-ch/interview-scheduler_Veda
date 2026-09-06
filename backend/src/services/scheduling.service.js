@@ -353,7 +353,7 @@ function buildSlotReasons({ scored, panel, request, candidateZone, slot }) {
  * Generate ranked slot proposals for a request.
  * @returns {Promise<{proposals: object[], engineUsed: string, diagnostics: object, matching: object}>}
  */
-export async function generateProposals(requestId, { excludeInterviewId = null, persist = true, simulate = true } = {}) {
+export async function generateProposals(requestId, { excludeInterviewId = null, persist = true } = {}) {
   const request = await prisma.interviewRequest.findUnique({
     where: { id: requestId },
     include: {
@@ -469,18 +469,12 @@ export async function generateProposals(requestId, { excludeInterviewId = null, 
   // Enforce variety: do not return five variants of the same hour.
   const diversified = diversify(ranked, maxProposals);
 
-  // ---- Optional Monte-Carlo resilience pass on the shortlist.
-  if (simulate && diversified.length) {
-    await attachResilience(diversified, request, space);
-  }
-
   const proposals = diversified.map((p, idx) => ({
     rank: idx + 1,
     startUtc: p.slot.start,
     endUtc: p.slot.end,
     score: p.score,
     riskScore: p.risk,
-    resilienceScore: p.resilience ?? null,
     interviewerIds: p.panel.map((x) => x.interviewerId),
     interviewers: p.panel.map((x) => ({
       id: x.interviewerId,
@@ -501,7 +495,7 @@ export async function generateProposals(requestId, { excludeInterviewId = null, 
   }));
 
   // Persisting returns the row ids, which the client needs in order to confirm
-  // or simulate a specific proposal.
+  // for a specific proposal.
   if (persist) {
     const ids = await persistProposals(requestId, proposals, engineUsed, settings);
     proposals.forEach((p, i) => {
@@ -590,48 +584,6 @@ function diversify(ranked, limit) {
   return picked;
 }
 
-/** Ask the simulator to stress-test the shortlist; degrade silently if it is down. */
-async function attachResilience(proposals, request, space) {
-  const payload = {
-    iterations: (await getSettings())[SETTING_KEYS.SIMULATION_ITERATIONS] || 200,
-    schedules: proposals.map((p, i) => ({
-      id: String(i),
-      start_utc: p.slot.start.toISOString(),
-      end_utc: p.slot.end.toISOString(),
-      buffer_minutes: request.bufferMinutes,
-      panel: p.panel.map((x) => ({
-        id: x.interviewerId,
-        utilization: x.workload?.utilization ?? 0,
-        timezone: x.timezone,
-        backup_count: Math.max(0, space.interviewers.length - request.requiredInterviewerCount),
-      })),
-      candidate_timezone: space.candidateZone,
-      days_out: (+p.slot.start - Date.now()) / 86400000,
-      downstream_interviews: 0,
-    })),
-  };
-
-  const res = await callAiService('/schedule/simulate', payload, { timeoutMs: 15000 });
-  if (!res.ok || !Array.isArray(res.data?.results)) return;
-
-  const byId = new Map(res.data.results.map((r) => [r.id, r]));
-  proposals.forEach((p, i) => {
-    const r = byId.get(String(i));
-    if (!r) return;
-    p.resilience = r.resilience_score;
-    p.breakdown.simulation = {
-      iterations: res.data.iterations,
-      meanDisruptionMinutes: r.mean_disruption,
-      p95DisruptionMinutes: r.p95_disruption,
-      recoveryRate: r.recovery_rate,
-      worstScenario: r.worst_scenario,
-    };
-    p.reasons.push(
-      `Simulated ${res.data.iterations} disruption scenarios: resilience ${r.resilience_score}/100, ${Math.round(r.recovery_rate * 100)}% auto-recoverable`
-    );
-  });
-}
-
 async function persistProposals(requestId, proposals, engineUsed, settings) {
   const ttlHours = settings[SETTING_KEYS.PROPOSAL_TTL_HOURS] || 48;
   const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
@@ -654,8 +606,12 @@ async function persistProposals(requestId, proposals, engineUsed, settings) {
           endUtc: p.endUtc,
           score: p.score,
           riskScore: p.riskScore,
-          resilienceScore: p.resilienceScore,
           interviewerIdsCsv: p.interviewerIds.join(','),
+          // Carried to confirm time so the booked panel seat keeps the score
+          // the matcher actually computed instead of a placeholder.
+          matchScoresJson: stringifyJson(
+            Object.fromEntries((p.interviewers || []).map((i) => [i.id, i.matchScore ?? 0]))
+          ),
           reasonsJson: stringifyJson(p.reasons),
           breakdownJson: stringifyJson(p.breakdown),
           engineUsed,

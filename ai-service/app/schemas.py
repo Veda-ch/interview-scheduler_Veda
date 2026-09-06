@@ -74,12 +74,21 @@ class AvailabilityConstraints(BaseModel):
     @field_validator("start_time", "end_time")
     @classmethod
     def valid_time(cls, v: str) -> str:
-        parts = str(v).split(":")
+        parts = str(v).strip().split(":")
         try:
             hour = int(parts[0])
             minute = int(parts[1]) if len(parts) > 1 else 0
         except (ValueError, IndexError):
             raise ValueError("time must look like HH:MM")
+        # Models routinely write end-of-day as "24:00" (and occasionally
+        # "23:60"). Both mean midnight, so normalise rather than reject - a
+        # rejection here throws away an otherwise correct parse.
+        if hour == 24 and minute == 0:
+            return "23:59"
+        if minute == 60 and hour <= 23:
+            hour, minute = hour + 1, 0
+            if hour == 24:
+                return "23:59"
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             raise ValueError("time out of range")
         return f"{hour:02d}:{minute:02d}"
@@ -147,6 +156,24 @@ class SkillMatchRequest(BaseModel):
     offered: list[dict[str, Any]] = Field(default_factory=list, max_length=120)
 
 
+class SkillCoverage(BaseModel):
+    """The model's judgement on one required skill."""
+
+    required: str = ""
+    covered_by: str = ""
+    coverage: int = Field(default=0, ge=0, le=100)
+    reason: str = ""
+
+
+class SkillMatchAnalysis(BaseModel):
+    """LLM assessment of how well an interviewer covers a role's requirements."""
+
+    overall: int = Field(default=0, ge=0, le=100)
+    per_skill: list[SkillCoverage] = Field(default_factory=list, max_length=60)
+    unmet_must_haves: list[str] = Field(default_factory=list, max_length=30)
+    summary: str = ""
+
+
 # --------------------------------------------------------------------------- #
 # Scheduling / simulation
 # --------------------------------------------------------------------------- #
@@ -210,46 +237,6 @@ class SimPanelMember(BaseModel):
     backup_count: int = 0
 
 
-class SimSchedule(BaseModel):
-    id: str
-    start_utc: str
-    end_utc: str
-    buffer_minutes: int = 15
-    panel: list[SimPanelMember] = Field(default_factory=list)
-    candidate_timezone: str = "UTC"
-    days_out: float = 0.0
-    downstream_interviews: int = 0
-
-
-class SimulateRequest(BaseModel):
-    schedules: list[SimSchedule] = Field(max_length=50)
-    iterations: int = Field(default=200, ge=10, le=5000)
-    seed: Optional[int] = None
-
-
-class ScenarioOutcome(BaseModel):
-    scenario: str
-    probability: float
-    occurrences: int
-    mean_disruption_minutes: float
-    recovered_fraction: float
-
-
-class SimResult(BaseModel):
-    id: str
-    resilience_score: float
-    mean_disruption: float
-    p95_disruption: float
-    recovery_rate: float
-    worst_scenario: str
-    scenarios: list[ScenarioOutcome]
-
-
-class SimulateResponse(BaseModel):
-    results: list[SimResult]
-    iterations: int
-    seed: Optional[int]
-    method: str = "monte-carlo"
 
 
 class HealthScoreRequest(BaseModel):

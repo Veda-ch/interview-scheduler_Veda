@@ -41,39 +41,7 @@ function findSkills(text) {
   return found;
 }
 
-function fallbackAnalyzeJd(text) {
-  const skills = findSkills(text);
-  const expMatch = String(text).match(/(\d+)\s*(?:-|to|–)\s*(\d+)\s*(?:\+)?\s*years?/i);
-  const singleExp = String(text).match(/(\d+)\s*\+?\s*years?/i);
-  const lower = String(text).toLowerCase();
 
-  let interviewType = 'TECHNICAL';
-  if (/system design|architect|scalab/i.test(lower)) interviewType = 'SYSTEM_DESIGN';
-  else if (/coding|algorithm|data structure/i.test(lower)) interviewType = 'CODING';
-  else if (/manager|leadership|stakeholder/i.test(lower)) interviewType = 'MANAGERIAL';
-
-  return {
-    technical_skills: skills.filter((s) => !SOFT.has(s)).map((name) => ({ name, weight: 0.8, must_have: true })),
-    soft_skills: skills.filter((s) => SOFT.has(s)).map((name) => ({ name, weight: 0.4, must_have: false })),
-    experience_min: expMatch ? Number(expMatch[1]) : singleExp ? Number(singleExp[1]) : 0,
-    experience_max: expMatch ? Number(expMatch[2]) : singleExp ? Number(singleExp[1]) + 3 : 10,
-    interview_type: interviewType,
-    topics: skills.slice(0, 6),
-    seniority: /senior|lead|staff|principal/i.test(lower) ? 'SENIOR' : 'MID',
-    summary: 'Extracted with the deterministic keyword extractor (AI service unavailable).',
-  };
-}
-
-function fallbackAnalyzeResume(text) {
-  const skills = findSkills(text);
-  const yearsMatch = String(text).match(/(\d+(?:\.\d+)?)\s*\+?\s*years?/i);
-  return {
-    skills: skills.map((name) => ({ name, proficiency: 3, evidence: 'keyword match' })),
-    years_experience: yearsMatch ? Number(yearsMatch[1]) : 0,
-    highlights: [],
-    summary: 'Extracted with the deterministic keyword extractor (AI service unavailable).',
-  };
-}
 
 const DAY_WORDS = {
   monday: 'monday', mon: 'monday', tuesday: 'tuesday', tue: 'tuesday', tues: 'tuesday',
@@ -211,12 +179,6 @@ async function withFallback(path, body, fallbackFn, { auditContext } = {}) {
   };
 }
 
-export const analyzeJobDescription = (text, opts) =>
-  withFallback('/ai/analyze-jd', { text }, (b) => fallbackAnalyzeJd(b.text), opts);
-
-export const analyzeResume = (text, jdSkills = [], opts) =>
-  withFallback('/ai/analyze-resume', { text, jd_skills: jdSkills }, (b) => fallbackAnalyzeResume(b.text), opts);
-
 export const parseAvailabilityText = (text, timezone = 'UTC', opts) =>
   withFallback('/ai/parse-availability', { text, timezone }, (b) => fallbackParseAvailability(b.text), opts);
 
@@ -246,4 +208,4 @@ export const semanticSkillMatch = (required, offered, opts) =>
     opts
   );
 
-export { fallbackAnalyzeJd, fallbackParseAvailability, fallbackAnalyzeFeedback, findSkills };
+export { fallbackParseAvailability, fallbackAnalyzeFeedback, findSkills };

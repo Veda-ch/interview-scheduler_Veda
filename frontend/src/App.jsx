@@ -9,12 +9,15 @@ import ScheduleBuilder from './pages/recruiter/ScheduleBuilder.jsx';
 import CalendarView from './pages/recruiter/CalendarView.jsx';
 import ControlTower from './pages/recruiter/ControlTower.jsx';
 import AnalyticsView from './pages/recruiter/AnalyticsView.jsx';
+import JobsPage from './pages/recruiter/JobsPage.jsx';
+import EvaluationsView from './pages/recruiter/EvaluationsView.jsx';
 
 import CandidatePortal from './pages/candidate/CandidatePortal.jsx';
 import AvailabilityPicker from './pages/candidate/AvailabilityPicker.jsx';
 import SlotConfirmation from './pages/candidate/SlotConfirmation.jsx';
 
 import InterviewerAssignments from './pages/interviewer/InterviewerAssignments.jsx';
+import InterviewerProfile from './pages/interviewer/InterviewerProfile.jsx';
 import VirtualRoom from './pages/meeting/VirtualRoom.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { ShieldCheck, Cpu } from 'lucide-react';
@@ -82,16 +85,9 @@ export default function App() {
                   )
                 }
               />
-              <Route
-                path="/calendar"
-                element={
-                  user.role === 'RECRUITER' ? (
-                    <CalendarView />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
+              {/* Read-only calendar. Both endpoints it reads are scoped to the
+                  caller server-side, so every role sees only their own events. */}
+              <Route path="/calendar" element={<CalendarView />} />
               <Route
                 path="/control-tower"
                 element={
@@ -107,6 +103,26 @@ export default function App() {
                 element={
                   user.role === 'RECRUITER' ? (
                     <AnalyticsView />
+                  ) : (
+                    <Navigate to={getRoleHome(user.role)} replace />
+                  )
+                }
+              />
+              <Route
+                path="/evaluations"
+                element={
+                  user.role === 'RECRUITER' || user.role === 'ADMIN' ? (
+                    <EvaluationsView />
+                  ) : (
+                    <Navigate to={getRoleHome(user.role)} replace />
+                  )
+                }
+              />
+              <Route
+                path="/jobs"
+                element={
+                  user.role === 'RECRUITER' || user.role === 'ADMIN' ? (
+                    <JobsPage />
                   ) : (
                     <Navigate to={getRoleHome(user.role)} replace />
                   )
@@ -151,6 +167,16 @@ export default function App() {
                 element={
                   user.role === 'INTERVIEWER' || user.role === 'RECRUITER' ? (
                     <InterviewerAssignments />
+                  ) : (
+                    <Navigate to={getRoleHome(user.role)} replace />
+                  )
+                }
+              />
+              <Route
+                path="/interviewer/profile"
+                element={
+                  user.role === 'INTERVIEWER' ? (
+                    <InterviewerProfile />
                   ) : (
                     <Navigate to={getRoleHome(user.role)} replace />
                   )

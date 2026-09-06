@@ -27,8 +27,9 @@ app = FastAPI(
     title="Interview Scheduler - AI & Optimization Service",
     description=(
         "Owns everything mathematical or linguistic: OR-Tools CP-SAT scheduling, "
-        "Monte-Carlo resilience simulation, explainable health scoring, semantic "
-        "skill matching, and all LLM calls (with deterministic fallbacks)."
+        "explainable health scoring, and all LLM calls - availability parsing, "
+        "feedback analysis, message drafting and skill matching - each with a "
+        "deterministic fallback."
     ),
     version="1.0.0",
 )
@@ -102,10 +103,16 @@ def health() -> dict:
         "solver": "ortools-cpsat" if solver_ok else "unavailable",
         "config": settings.describe(),
         "transparency": {
-            "llm_role": "language and ambiguity only (JD, resume, availability text, feedback, message drafting)",
-            "deterministic_role": "all scheduling decisions, constraints, conflict prevention, skill matching",
+            "llm_role": (
+                "judgement about language and meaning: availability text, feedback "
+                "analysis, message drafting, and skill-coverage matching"
+            ),
+            "deterministic_role": (
+                "all scheduling decisions: hard constraints, conflict prevention, "
+                "timezones, buffers, workload limits, double-booking guard"
+            ),
             "optimizer": "OR-Tools CP-SAT over a pre-validated feasible space",
-            "simulator": "Monte-Carlo with stated (not learned) hazard rates",
+            "fallback": "every LLM call degrades to a deterministic extractor, never an error",
         },
     }
 

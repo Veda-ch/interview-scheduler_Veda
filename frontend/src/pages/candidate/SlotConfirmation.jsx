@@ -224,7 +224,7 @@ export default function SlotConfirmation() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-slate-900">
-                      {iv.request?.roundName || 'Interview'}
+                      {iv.round?.name || 'Interview'}
                     </span>
                     <span className="chip chip-green">Confirmed</span>
                   </div>

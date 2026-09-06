@@ -25,7 +25,7 @@ const python = fs.existsSync(venvPython)
 
 const args = python === 'py' ? ['-3.12'] : [];
 args.push('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', process.env.AI_SERVICE_PORT || '8000');
-if (process.env.NODE_ENV !== 'production') args.push('--reload');
+if (process.env.NODE_ENV !== 'production') args.push('--reload', '--reload-dir', 'app');
 
 if (!fs.existsSync(venvPython)) {
   console.warn(

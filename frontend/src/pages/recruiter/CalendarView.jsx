@@ -28,30 +28,59 @@ export default function CalendarView() {
   async function loadCalendarData() {
     setLoading(true);
     try {
-      const interviews = await api.get('/interviews?take=50');
-      const formatted = (interviews || []).map((iv) => {
-        const candidateName = iv.request?.application?.candidate?.user?.name || 'Candidate';
-        const roundName = iv.request?.roundName || 'Interview';
+      const [interviews, requests] = await Promise.all([
+        api.get('/interviews?take=50').catch(() => []),
+        api.get('/interview-requests').catch(() => []),
+      ]);
+
+      const formattedInterviews = (interviews || []).map((iv) => {
+        const candidateName = iv.candidate?.name || 'Candidate';
+        const roundName = iv.round?.name || 'Interview';
+        const isConfirmed = iv.status === 'CONFIRMED';
         return {
           id: iv.id,
-          title: `${roundName} — ${candidateName}`,
+          title: `🔒 ${roundName} — ${candidateName}`,
           start: iv.startUtc,
           end: iv.endUtc,
-          backgroundColor: '#2563eb',
-          borderColor: '#1d4ed8',
+          backgroundColor: isConfirmed ? '#059669' : '#2563eb',
+          borderColor: isConfirmed ? '#047857' : '#1d4ed8',
           textColor: '#ffffff',
           extendedProps: {
             roundName,
             candidateName,
-            jobTitle: iv.request?.application?.job?.title,
-            interviewType: iv.request?.interviewType,
+            jobTitle: iv.job?.title,
+            interviewType: iv.round?.type,
             status: iv.status,
             panel: iv.panel || [],
             joinUrl: iv.meeting?.joinUrl,
           },
         };
       });
-      setEvents(formatted);
+
+      const formattedRequests = (requests || []).map((req) => {
+        const candidateName = req.candidate?.name || 'Candidate';
+        const roundName = req.roundName || 'Interview Round';
+        return {
+          id: `req-${req.id}`,
+          title: `📅 Window: ${roundName} (${candidateName})`,
+          start: req.earliestUtc,
+          end: req.latestUtc,
+          backgroundColor: '#f59e0b',
+          borderColor: '#d97706',
+          textColor: '#ffffff',
+          extendedProps: {
+            roundName: `Window: ${roundName}`,
+            candidateName,
+            jobTitle: req.job?.title,
+            interviewType: req.interviewType,
+            status: req.status,
+            panel: [],
+            isWindow: true,
+          },
+        };
+      });
+
+      setEvents([...formattedInterviews, ...formattedRequests]);
     } catch (err) {
       console.error('Failed to load calendar events:', err);
     } finally {
@@ -161,7 +190,7 @@ export default function CalendarView() {
                       key={idx}
                       className="px-2 py-1 rounded-lg bg-slate-100 text-slate-800 font-semibold border border-slate-200"
                     >
-                      {p.interviewer?.user?.name || 'Panelist'}
+                      {p.name || 'Panelist'}
                     </span>
                   ))}
                 </div>

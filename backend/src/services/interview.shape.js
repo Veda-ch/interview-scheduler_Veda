@@ -25,7 +25,6 @@ export function shapeInterview(iv, { viewerTimezone = 'UTC', viewerRole, include
     actualEndUtc: iv.actualEndUtc ?? null,
     scheduleScore: iv.scheduleScore,
     riskScore: iv.riskScore,
-    resilienceScore: iv.resilienceScore ?? null,
     reasons: parseArray(iv.reasonsJson),
     engineUsed: iv.engineUsed,
     cancelReason: iv.cancelReason ?? null,

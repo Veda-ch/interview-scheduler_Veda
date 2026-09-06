@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import TimezoneCard from '../../components/TimezoneCard.jsx';
 import {
   Clock,
   Sparkles,
@@ -143,6 +144,8 @@ export default function AvailabilityPicker() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left Column: Natural Language AI Parser (5 Cols) */}
         <div className="md:col-span-6 space-y-6">
+          <TimezoneCard note="Windows you enter below are read in this zone, then stored in UTC." />
+
           <div className="card p-5 bg-white border border-sky-100 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
@@ -285,8 +288,9 @@ export default function AvailabilityPicker() {
                 </div>
               ) : (
                 windows.map((w) => {
-                  const start = DateTime.fromISO(w.startUtc);
-                  const end = DateTime.fromISO(w.endUtc);
+                  // Render in the candidate's chosen zone, not the browser's.
+                  const start = DateTime.fromISO(w.startUtc, { zone: user?.timezone || 'UTC' });
+                  const end = DateTime.fromISO(w.endUtc, { zone: user?.timezone || 'UTC' });
                   const isPreferred = w.kind === 'PREFERRED';
                   const isBlackout = w.kind === 'UNAVAILABLE';
 

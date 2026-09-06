@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js';
 import { notFound, conflict, badRequest } from '../lib/errors.js';
 import { parseArray, parseObject, stringifyJson } from '../lib/json.js';
 import { upsertSkillsByName } from './skill.service.js';
-import { analyzeJobDescription, semanticSkillMatch } from './ai.service.js';
+import { semanticSkillMatch } from './ai.service.js';
 
 const jobInclude = {
   recruiter: { include: { user: { select: { id: true, name: true, email: true } } } },
@@ -22,8 +22,6 @@ export function shapeJob(row) {
     experienceMin: row.experienceMin,
     experienceMax: row.experienceMax,
     requiredSkills: parseArray(row.requiredSkillsJson),
-    aiExtraction: parseObject(row.aiExtractionJson),
-    aiProviderUsed: row.aiProviderUsed,
     status: row.status,
     recruiter: row.recruiter ? { id: row.recruiter.id, name: row.recruiter.user?.name } : null,
     applicationCount: row._count?.applications ?? undefined,
@@ -33,38 +31,15 @@ export function shapeJob(row) {
 }
 
 /**
- * Create a job. When `analyzeWithAi` is set, the JD text is sent to the AI
- * service; the *validated* structured result is stored and its skills become
- * the job's required skills. If the AI is unavailable the deterministic
- * extractor fills in, and `aiProviderUsed` records which one ran.
+ * Create a job from what the recruiter typed.
+ *
+ * The required skills are entered by hand, not inferred: a job description is
+ * already a structured statement of intent, and guessing at it only introduced
+ * skills the recruiter never asked for. Those skills are what interviewers are
+ * matched against, so they stay exactly as entered.
  */
-export async function createJob({ recruiterId, analyzeWithAi = true, requiredSkills, ...data }, auditContext) {
-  let extraction = null;
-  let provider = null;
-  let fallbackUsed = false;
-  let skills = requiredSkills || [];
-
-  if (analyzeWithAi && data.description?.length > 40) {
-    const result = await analyzeJobDescription(data.description, { auditContext });
-    extraction = result.data;
-    provider = result.provider;
-    fallbackUsed = result.fallbackUsed;
-
-    if (!skills.length) {
-      skills = [
-        ...(extraction.technical_skills || []).map((s) => ({
-          name: typeof s === 'string' ? s : s.name,
-          weight: typeof s === 'string' ? 0.8 : (s.weight ?? 0.8),
-          mustHave: typeof s === 'string' ? true : (s.must_have ?? true),
-        })),
-        ...(extraction.soft_skills || []).map((s) => ({
-          name: typeof s === 'string' ? s : s.name,
-          weight: 0.3,
-          mustHave: false,
-        })),
-      ].filter((s) => s.name);
-    }
-  }
+export async function createJob({ recruiterId, requiredSkills, ...data }) {
+  const skills = requiredSkills || [];
 
   // Register the skills in the taxonomy so matching can key off them.
   if (skills.length) await upsertSkillsByName(prisma, skills.map((s) => s.name));
@@ -74,19 +49,11 @@ export async function createJob({ recruiterId, analyzeWithAi = true, requiredSki
       ...data,
       recruiterId,
       requiredSkillsJson: stringifyJson(skills),
-      aiExtractionJson: extraction ? stringifyJson(extraction) : null,
-      aiProviderUsed: provider,
-      ...(extraction?.experience_min != null && data.experienceMin == null
-        ? { experienceMin: Number(extraction.experience_min) || 0 }
-        : {}),
-      ...(extraction?.experience_max != null && data.experienceMax == null
-        ? { experienceMax: Number(extraction.experience_max) || 10 }
-        : {}),
     },
     include: jobInclude,
   });
 
-  return { job: shapeJob(job), ai: extraction ? { provider, fallbackUsed, extraction } : null };
+  return { job: shapeJob(job) };
 }
 
 export async function updateJob(id, data) {

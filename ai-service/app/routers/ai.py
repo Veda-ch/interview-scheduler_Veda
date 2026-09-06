@@ -21,15 +21,11 @@ from ..schemas import (
     FeedbackAnalysis,
     FeedbackRequest,
     GeneratedMessage,
-    JdAnalysis,
-    JdRequest,
     MessageRequest,
-    ResumeAnalysis,
-    ResumeRequest,
     SkillMatchRequest,
 )
 from ..services import extractors
-from ..services.matching import match_skills
+from ..services.matching import match_skills_llm
 
 log = logging.getLogger("ai.router")
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -47,45 +43,6 @@ def _envelope(result, meta: dict, extra: dict | None = None) -> dict:
         "warning": meta.get("warning"),
         **(extra or {}),
     }
-
-
-@router.post("/analyze-jd")
-def analyze_jd(payload: JdRequest) -> dict:
-    prompt = (
-        "You are parsing a software-engineering job description for an interview "
-        "scheduling system. Extract the required skills and interview metadata.\n"
-        "Rules: use canonical technology names (e.g. 'Spring Boot', not 'springboot'). "
-        "must_have=true only for skills the JD lists as required. "
-        "interview_type must be one of TECHNICAL, CODING, SYSTEM_DESIGN, MANAGERIAL, HR.\n\n"
-        f"JOB DESCRIPTION:\n{payload.text[:8000]}"
-    )
-    result, meta = structured_call(
-        get_provider(), prompt, JdAnalysis,
-        fallback=lambda: extractors.extract_jd(payload.text),
-        max_retries=get_settings().llm_max_retries,
-    )
-    return _envelope(result, meta)
-
-
-@router.post("/analyze-resume")
-def analyze_resume(payload: ResumeRequest) -> dict:
-    prompt = (
-        "Extract structured skill data from this resume for an interview scheduling "
-        "system. proficiency is 1-5 based on evidence of depth in the text. "
-        "Use canonical technology names. Do not invent skills that are not present.\n\n"
-        f"RESUME:\n{payload.text[:12000]}"
-    )
-    result, meta = structured_call(
-        get_provider(), prompt, ResumeAnalysis,
-        fallback=lambda: extractors.extract_resume(payload.text, payload.jd_skills),
-        max_retries=get_settings().llm_max_retries,
-    )
-    # JD comparison is always deterministic - an LLM must not invent a match score.
-    if payload.jd_skills:
-        result.jd_match = extractors.score_skill_match(
-            payload.jd_skills, [s.model_dump() for s in result.skills]
-        )
-    return _envelope(result, meta, {"jd_match_method": "deterministic"})
 
 
 @router.post("/parse-availability")
@@ -129,6 +86,14 @@ def analyze_feedback(payload: FeedbackRequest) -> dict:
     )
     if not result.next_round_focus:
         result.next_round_focus = result.recommended_topics[:6]
+    # Smaller local models reliably fill the lists but often leave `summary`
+    # blank. Compose one from their own findings rather than showing the
+    # recruiter an empty field.
+    if not result.summary.strip():
+        result.summary = (
+            f"{len(result.strengths)} strength(s), {len(result.skill_gaps)} gap(s); "
+            f"overall rating {payload.overall_rating}/5."
+        )
     return _envelope(result, meta)
 
 
@@ -156,5 +121,5 @@ def generate_message(payload: MessageRequest) -> dict:
 
 @router.post("/skill-match")
 def skill_match(payload: SkillMatchRequest) -> dict:
-    """Deterministic + embedding-assisted; deliberately never an LLM call."""
-    return {"ok": True, **match_skills(payload.required, payload.offered)}
+    """LLM skill-coverage judgement (deterministic ontology matcher as fallback)."""
+    return {"ok": True, **match_skills_llm(payload.required, payload.offered)}

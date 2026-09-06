@@ -4,10 +4,12 @@ import { notFound, badRequest } from '../lib/errors.js';
 import { parseObject, parseArray, stringifyJson } from '../lib/json.js';
 import { upsertSkillsByName } from './skill.service.js';
 import { ACTIVE_INTERVIEW_STATUSES } from '../../../shared/constants.js';
+import { fullInterviewInclude } from './interview.shape.js';
 
 const candidateInclude = {
   user: { select: { id: true, name: true, email: true, timezone: true, phone: true, avatarSeed: true } },
   skills: { include: { skill: true } },
+  applications: { include: { job: true } },
 };
 
 export function shapeCandidate(row) {
@@ -15,6 +17,7 @@ export function shapeCandidate(row) {
   return {
     id: row.id,
     userId: row.userId,
+    candidateNumber: row.candidateNumber || `CND-${row.id.slice(-4).toUpperCase()}`,
     name: row.user?.name,
     email: row.user?.email,
     timezone: row.user?.timezone,
@@ -26,7 +29,15 @@ export function shapeCandidate(row) {
     location: row.location,
     resumeUrl: row.resumeUrl,
     hasResumeText: Boolean(row.resumeText),
-    resumeAnalysis: parseObject(row.resumeAnalysisJson),
+    applications: (row.applications || []).map((app) => ({
+      id: app.id,
+      jobId: app.jobId,
+      jobTitle: app.job?.title || row.headline || 'Senior Software Engineer',
+      department: app.job?.department || 'Engineering',
+      status: app.status,
+      stage: app.stage,
+      matchScore: app.matchScore,
+    })),
     preferences: {
       maxInterviewsPerDay: row.maxInterviewsPerDay,
       minBufferMinutes: row.minBufferMinutes,
@@ -131,47 +142,6 @@ export async function attachResume(candidateId, { resumeUrl, resumeText }) {
   return shapeCandidate(row);
 }
 
-/**
- * Persist a validated AI resume analysis and merge extracted skills into the
- * profile. Skills coming from AI are tagged `RESUME_AI` so the UI can show
- * provenance and a human can correct them - AI output is never silently
- * indistinguishable from user-entered data.
- */
-export async function applyResumeAnalysis(candidateId, analysis, providerUsed = 'mock') {
-  const skills = parseArray(stringifyJson(analysis?.skills || []));
-
-  await prisma.$transaction(async (tx) => {
-    await tx.candidateProfile.update({
-      where: { id: candidateId },
-      data: {
-        resumeAnalysisJson: stringifyJson({ ...analysis, providerUsed, analyzedAt: new Date().toISOString() }),
-        ...(analysis?.years_experience != null
-          ? { yearsExperience: Number(analysis.years_experience) || 0 }
-          : {}),
-      },
-    });
-
-    if (skills.length) {
-      const names = skills.map((s) => (typeof s === 'string' ? s : s.name)).filter(Boolean);
-      const resolved = await upsertSkillsByName(tx, names);
-      for (const raw of skills) {
-        const name = typeof raw === 'string' ? raw : raw.name;
-        if (!name) continue;
-        const skill = resolved.get(name.toLowerCase());
-        if (!skill) continue;
-        const proficiency = Math.min(Math.max(Math.round(Number(raw?.proficiency) || 3), 1), 5);
-        await tx.candidateSkill.upsert({
-          where: { candidateId_skillId: { candidateId, skillId: skill.id } },
-          update: { proficiency, source: 'RESUME_AI' },
-          create: { candidateId, skillId: skill.id, proficiency, source: 'RESUME_AI' },
-        });
-      }
-    }
-  });
-
-  return getCandidateById(candidateId);
-}
-
 export async function saveAvailabilityConstraints(candidateId, rawText, constraints) {
   await prisma.candidateProfile.update({
     where: { id: candidateId },
@@ -192,11 +162,10 @@ export async function candidateInterviews(candidateId, { includePast = true } = 
       request: { application: { candidateId } },
       ...(includePast ? {} : { status: { in: ACTIVE_INTERVIEW_STATUSES } }),
     },
-    include: {
-      request: { include: { application: { include: { job: true } } } },
-      panel: { include: { interviewer: { include: { user: { select: { name: true, timezone: true } } } } } },
-      meeting: true,
-    },
+    // Use the canonical include so shapeInterview can fill every field it
+    // promises - a partial include silently yields nulls for health,
+    // calendarEvent, incidents and the candidate's own name.
+    include: fullInterviewInclude,
     orderBy: { startUtc: 'desc' },
   });
   return rows;

@@ -11,7 +11,6 @@ import {
   listCandidates,
   updateCandidate,
   attachResume,
-  applyResumeAnalysis,
   saveAvailabilityConstraints,
   candidateInterviews,
 } from '../services/candidate.service.js';
@@ -21,7 +20,7 @@ import {
   deleteAvailabilityWindow,
   applyParsedConstraints,
 } from '../services/availability.service.js';
-import { analyzeResume, parseAvailabilityText } from '../services/ai.service.js';
+import { parseAvailabilityText } from '../services/ai.service.js';
 import { auditFromRequest } from '../services/audit.service.js';
 import { AUDIT_ACTIONS, ROLES, AVAILABILITY_KIND_VALUES } from '../../../shared/constants.js';
 import { isValidZone } from '../lib/time.js';
@@ -141,54 +140,8 @@ router.post(
       extractedTextLength: extracted.length,
       note: extracted
         ? 'Text extracted successfully.'
-        : 'We could not extract text from this file (scanned or compressed PDF). Paste your resume text to enable AI analysis.',
+        : 'We could not extract text from this file (scanned or compressed PDF).',
     });
-  })
-);
-
-/** Store raw resume text directly - the reliable path for AI analysis. */
-router.post(
-  '/:id/resume-text',
-  meAlias,
-  requireCandidateAccess({ writable: true }),
-  validateBody(z.object({ text: z.string().trim().min(30).max(20000) })),
-  asyncHandler(async (req, res) => {
-    const candidate = await attachResume(req.params.id, { resumeUrl: undefined, resumeText: req.body.text });
-    res.json(candidate);
-  })
-);
-
-/** Run AI resume analysis and merge the validated result into the profile. */
-router.post(
-  '/:id/analyze-resume',
-  meAlias,
-  requireCandidateAccess({ writable: true }),
-  validateBody(z.object({ text: z.string().trim().min(30).max(20000).optional(), jobId: z.string().optional() })),
-  asyncHandler(async (req, res) => {
-    const profile = await prisma.candidateProfile.findUnique({ where: { id: req.params.id } });
-    const text = req.body.text || profile?.resumeText;
-    if (!text) throw badRequest('No resume text on file. Upload a text-based resume or paste the text first.');
-
-    let jdSkills = [];
-    if (req.body.jobId) {
-      const job = await prisma.job.findUnique({ where: { id: req.body.jobId } });
-      if (job) jdSkills = JSON.parse(job.requiredSkillsJson || '[]');
-    }
-
-    const result = await analyzeResume(text, jdSkills, {
-      auditContext: { actorUserId: req.user.id, actorRole: req.user.role, entity: 'CandidateProfile', entityId: req.params.id },
-    });
-    const candidate = await applyResumeAnalysis(req.params.id, result.data, result.provider);
-
-    await auditFromRequest(req, {
-      action: AUDIT_ACTIONS.RESUME_ANALYZED,
-      entity: 'CandidateProfile',
-      entityId: req.params.id,
-      summary: `Resume analysed via ${result.provider}${result.fallbackUsed ? ' (deterministic fallback)' : ''}`,
-      metadata: { skillCount: result.data?.skills?.length ?? 0, provider: result.provider },
-    });
-
-    res.json({ candidate, analysis: result.data, ai: { provider: result.provider, fallbackUsed: result.fallbackUsed, warning: result.warning } });
   })
 );
 
@@ -351,7 +304,6 @@ router.get(
         durationMinutes: p.request.durationMinutes,
         score: p.score,
         riskScore: p.riskScore,
-        resilienceScore: p.resilienceScore,
         reasons: JSON.parse(p.reasonsJson || '[]'),
         engineUsed: p.engineUsed,
         expiresAt: p.expiresAt,

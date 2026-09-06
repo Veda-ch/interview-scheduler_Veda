@@ -25,6 +25,7 @@ export function shapeInterviewer(row, extras = {}) {
     seniority: row.seniority,
     yearsExperience: row.yearsExperience,
     isActive: row.isActive && row.user?.isActive !== false,
+    autoAcceptEnabled: row.autoAcceptEnabled,
     bioText: row.bioText,
     interviewTypes: csvToArray(row.interviewTypesCsv),
     workingHours: {

@@ -12,8 +12,6 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import {
-  analyzeJobDescription,
-  analyzeResume,
   parseAvailabilityText,
   analyzeFeedback,
   generateMessage,
@@ -41,36 +39,6 @@ const envelope = (result) => ({
       : 'Produced by a language model and validated against a strict schema.',
   },
 });
-
-router.post(
-  '/analyze-jd',
-  requireRole(ROLES.RECRUITER, ROLES.ADMIN),
-  validateBody(z.object({ text: z.string().trim().min(20).max(20000) })),
-  asyncHandler(async (req, res) => {
-    const result = await analyzeJobDescription(req.body.text, {
-      auditContext: { actorUserId: req.user.id, actorRole: req.user.role, entity: 'Job' },
-    });
-    await auditFromRequest(req, {
-      action: AUDIT_ACTIONS.JD_ANALYZED,
-      entity: 'Job',
-      summary: `Ad-hoc JD analysis via ${result.provider}`,
-    });
-    res.json(envelope(result));
-  })
-);
-
-router.post(
-  '/analyze-resume',
-  validateBody(
-    z.object({
-      text: z.string().trim().min(30).max(20000),
-      jdSkills: z.array(z.object({ name: z.string(), weight: z.number().optional(), mustHave: z.boolean().optional() })).max(50).default([]),
-    })
-  ),
-  asyncHandler(async (req, res) => {
-    res.json(envelope(await analyzeResume(req.body.text, req.body.jdSkills)));
-  })
-);
 
 router.post(
   '/parse-availability',

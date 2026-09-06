@@ -18,6 +18,8 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "node prisma/seed.js",
+    "db:seed:blank": "node prisma/seed.js",
+    "db:seed:demo": "node prisma/seed-demo-backup.js",
     "db:studio": "prisma studio",
     "db:use-postgres": "node scripts/set-db-provider.js postgresql",
     "db:use-sqlite": "node scripts/set-db-provider.js sqlite",

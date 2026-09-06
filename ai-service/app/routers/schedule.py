@@ -8,15 +8,13 @@ from fastapi import APIRouter, HTTPException
 from ..schemas import (
     HealthScoreRequest,
     HealthScoreResponse,
-    SimulateRequest,
-    SimulateResponse,
     SolveRequest,
     SolveResponse,
     SkillMatchRequest,
 )
 from ..services import health as health_service
-from ..services import optimizer, simulator
-from ..services.matching import match_skills
+from ..services import optimizer
+from ..services.matching import match_skills_llm
 
 log = logging.getLogger("ai.schedule")
 
@@ -33,18 +31,6 @@ def solve_schedule(payload: SolveRequest) -> SolveResponse:
         raise HTTPException(status_code=500, detail={"message": f"solver failure: {exc}"}) from exc
 
 
-@router.post("/schedule/simulate", response_model=SimulateResponse)
-def simulate_schedules(payload: SimulateRequest) -> SimulateResponse:
-    """Monte-Carlo disruption simulation -> resilience score per schedule."""
-    return simulator.simulate(payload)
-
-
-@router.get("/schedule/simulation-assumptions")
-def simulation_assumptions() -> dict:
-    """Full disclosure of the simulator's stated (not learned) parameters."""
-    return simulator.assumptions()
-
-
 @router.post("/schedule/health", response_model=HealthScoreResponse)
 def schedule_health(payload: HealthScoreRequest) -> HealthScoreResponse:
     """Explainable heuristic health score with a complete arithmetic breakdown."""
@@ -53,4 +39,5 @@ def schedule_health(payload: HealthScoreRequest) -> HealthScoreResponse:
 
 @router.post("/match/skills")
 def skills(payload: SkillMatchRequest) -> dict:
-    return {"ok": True, **match_skills(payload.required, payload.offered)}
+    """Skill coverage for panel ranking - LLM judged, ontology fallback."""
+    return {"ok": True, **match_skills_llm(payload.required, payload.offered)}

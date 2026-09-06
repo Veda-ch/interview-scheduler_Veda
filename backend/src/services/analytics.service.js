@@ -28,7 +28,6 @@ export async function overviewMetrics({ days = 30 } = {}) {
     incidents,
     recoveries,
     scores,
-    simulations,
     interviewerRows,
     feedbackRows,
   ] = await Promise.all([
@@ -37,7 +36,7 @@ export async function overviewMetrics({ days = 30 } = {}) {
       select: {
         id: true, status: true, startUtc: true, endUtc: true, createdAt: true,
         actualStartUtc: true, actualEndUtc: true, candidateResponse: true,
-        scheduleScore: true, riskScore: true, resilienceScore: true, engineUsed: true,
+        scheduleScore: true, riskScore: true, engineUsed: true,
         rescheduledFromId: true,
         request: { select: { id: true, createdAt: true, roundNumber: true, applicationId: true } },
       },
@@ -58,7 +57,6 @@ export async function overviewMetrics({ days = 30 } = {}) {
       where: { computedAt: { gte: since } },
       orderBy: { computedAt: 'desc' },
     }),
-    prisma.scheduleSimulation.findMany({ where: { createdAt: { gte: since } } }),
     prisma.interviewerProfile.findMany({ where: { isActive: true }, select: { id: true } }),
     prisma.feedback.findMany({ where: { submittedAt: { gte: since } }, select: { overallRating: true, recommendation: true } }),
   ]);
@@ -145,15 +143,8 @@ export async function overviewMetrics({ days = 30 } = {}) {
       averageTimezoneRisk: avg(latestScores.map((s) => s.timezoneRisk)),
       scoredInterviews: latestScores.length,
       averageSlotScore: avg(interviews.map((i) => i.scheduleScore).filter(Boolean)),
-      averageResilienceScore: avg(
-        [...interviews.map((i) => i.resilienceScore), ...simulations.map((s) => s.resilienceScore)].filter(
-          (v) => typeof v === 'number'
-        )
-      ),
-      simulationsRun: simulations.length,
-      simulationIterationsTotal: simulations.reduce((a, s) => a + s.iterations, 0),
     },
-    resilience: {
+    recovery: {
       incidentsDetected: incidents.length,
       incidentsResolved: incidents.filter((i) => i.status === INCIDENT_STATUS.RESOLVED).length,
       incidentsOpen: incidents.filter((i) => ![INCIDENT_STATUS.RESOLVED, INCIDENT_STATUS.DISMISSED].includes(i.status)).length,
@@ -314,4 +305,148 @@ export async function healthDistribution() {
         drivers: parseObject(s.breakdownJson).components ?? null,
       })),
   };
+}
+
+/**
+ * Candidate evaluations for the recruiter's comparison view.
+ *
+ * Aggregates every submitted feedback per candidate together with the AI
+ * Analysis Agent's output, and ranks candidates so they can be compared
+ * side by side. Candidates with no feedback yet are returned too (with
+ * `hasFeedback: false`) so the recruiter can see who is still in flight
+ * rather than silently dropping them.
+ */
+const RECOMMENDATION_WEIGHT = {
+  STRONG_YES: 100,
+  YES: 75,
+  NEUTRAL: 50,
+  NO: 25,
+  STRONG_NO: 0,
+};
+
+export async function candidateEvaluations() {
+  const candidates = await prisma.candidateProfile.findMany({
+    include: {
+      user: { select: { name: true, email: true, timezone: true } },
+      applications: { include: { job: true } },
+    },
+  });
+
+  // `submittedAt` is non-nullable with a default, so every row here is submitted.
+  const feedback = await prisma.feedback.findMany({
+    include: {
+      interviewer: { include: { user: { select: { name: true } } } },
+      interview: {
+        include: {
+          request: { include: { application: { include: { job: true } } } },
+        },
+      },
+    },
+    orderBy: { submittedAt: 'desc' },
+  });
+
+  const byCandidate = new Map();
+  for (const f of feedback) {
+    const candidateId = f.interview?.request?.application?.candidateId;
+    if (!candidateId) continue;
+    if (!byCandidate.has(candidateId)) byCandidate.set(candidateId, []);
+    byCandidate.get(candidateId).push(f);
+  }
+
+  const rows = candidates.map((c) => {
+    const items = byCandidate.get(c.id) || [];
+
+    const ratings = items.map((f) => f.overallRating).filter((n) => typeof n === 'number');
+    const averageRating = avg(ratings);
+
+    const recommendations = {};
+    for (const f of items) {
+      recommendations[f.recommendation] = (recommendations[f.recommendation] || 0) + 1;
+    }
+
+    // Union the AI Analysis Agent's output across rounds, keeping first-seen order.
+    const strengths = [];
+    const gaps = [];
+    const focus = [];
+    const sentiments = [];
+    const rounds = [];
+
+    for (const f of items) {
+      const ai = parseObject(f.aiAnalysisJson) || {};
+      for (const s of ai.strengths || []) if (!strengths.includes(s)) strengths.push(s);
+      for (const g of ai.skill_gaps || []) if (!gaps.includes(g)) gaps.push(g);
+      for (const t of ai.next_round_focus || []) if (!focus.includes(t)) focus.push(t);
+      if (ai.sentiment) sentiments.push(ai.sentiment);
+
+      rounds.push({
+        interviewId: f.interviewId,
+        roundName: f.interview?.request?.roundName ?? null,
+        interviewType: f.interview?.request?.interviewType ?? null,
+        interviewerName: f.interviewer?.user?.name ?? null,
+        overallRating: f.overallRating,
+        recommendation: f.recommendation,
+        ratings: parseObject(f.ratingsJson) || {},
+        comments: f.comments,
+        submittedAt: f.submittedAt,
+        ai: {
+          summary: ai.summary ?? null,
+          sentiment: ai.sentiment ?? null,
+          strengths: ai.strengths || [],
+          skillGaps: ai.skill_gaps || [],
+          nextRoundFocus: ai.next_round_focus || [],
+          providerUsed: ai.providerUsed ?? f.aiProviderUsed ?? null,
+          fallbackUsed: ai.fallbackUsed ?? null,
+        },
+      });
+    }
+
+    // Rank = how the panel actually voted, tempered by the average rating.
+    // Both are on 0-100 so the blend stays interpretable.
+    const recScore = items.length
+      ? avg(items.map((f) => RECOMMENDATION_WEIGHT[f.recommendation] ?? 50))
+      : null;
+    const ratingScore = averageRating != null ? (averageRating / 5) * 100 : null;
+    const overallScore =
+      recScore != null && ratingScore != null
+        ? Math.round((recScore * 0.6 + ratingScore * 0.4) * 10) / 10
+        : null;
+
+    const dominantSentiment = sentiments.length
+      ? sentiments.sort(
+          (a, b) =>
+            sentiments.filter((x) => x === b).length - sentiments.filter((x) => x === a).length
+        )[0]
+      : null;
+
+    const app = c.applications[0];
+
+    return {
+      candidateId: c.id,
+      candidateNumber: c.candidateNumber,
+      name: c.user?.name,
+      email: c.user?.email,
+      headline: c.headline,
+      yearsExperience: c.yearsExperience,
+      job: app?.job ? { id: app.job.id, title: app.job.title, department: app.job.department } : null,
+      hasFeedback: items.length > 0,
+      roundsEvaluated: items.length,
+      averageRating,
+      recommendations,
+      overallScore,
+      sentiment: dominantSentiment,
+      aiStrengths: strengths,
+      aiSkillGaps: gaps,
+      aiNextRoundFocus: focus,
+      rounds,
+    };
+  });
+
+  // Evaluated candidates first, best score first; un-evaluated trail alphabetically.
+  rows.sort((a, b) => {
+    if (a.hasFeedback !== b.hasFeedback) return a.hasFeedback ? -1 : 1;
+    if (a.hasFeedback) return (b.overallScore ?? 0) - (a.overallScore ?? 0);
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  return rows.map((r, i) => ({ ...r, rank: r.hasFeedback ? i + 1 : null }));
 }

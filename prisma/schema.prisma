@@ -73,18 +73,20 @@ model RefreshToken {
 model CandidateProfile {
   id                String  @id @default(cuid())
   userId            String  @unique
+  candidateNumber   String? @unique
   headline          String?
   yearsExperience   Float   @default(0)
   currentCompany    String?
   location          String?
   resumeUrl         String?
-  resumeText        String? // extracted plain text used for AI analysis
-  resumeAnalysisJson String? // validated AI output {skills, summary, ...}
+  resumeText        String? // plain text extracted from the uploaded file
   // Candidate scheduling preferences (soft constraints)
   maxInterviewsPerDay Int    @default(2)
   minBufferMinutes    Int    @default(30)
+  // The 9-to-5 fallback: used only when the candidate has declared no
+  // availability of their own. Declared windows override this entirely.
   preferredStartMinute Int   @default(540) // 09:00 local, minutes from midnight
-  preferredEndMinute   Int   @default(1200) // 20:00 local
+  preferredEndMinute   Int   @default(1020) // 17:00 local
   availabilityNoteRaw  String? // original natural-language availability text
   availabilityConstraintsJson String? // validated structured constraints from AI
 
@@ -108,6 +110,10 @@ model InterviewerProfile {
   interviewTypesCsv   String  @default("TECHNICAL") // TECHNICAL,CODING,SYSTEM_DESIGN,MANAGERIAL,HR
   isActive            Boolean @default(true)
   bioText             String?
+  // When true, a booking that lands inside a window this interviewer explicitly
+  // declared AVAILABLE/PREFERRED is accepted on their behalf - declaring the
+  // window is the consent, so no approval round-trip is needed.
+  autoAcceptEnabled   Boolean @default(true)
 
   user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   skills       InterviewerSkill[]
@@ -143,7 +149,7 @@ model CandidateSkill {
   candidateId String
   skillId     String
   proficiency Int    @default(3) // 1..5
-  source      String @default("SELF") // SELF | RESUME_AI | RECRUITER
+  source      String @default("SELF") // SELF | RECRUITER
 
   candidate CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   skill     Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
@@ -215,8 +221,6 @@ model Job {
   experienceMin      Float    @default(0)
   experienceMax      Float    @default(10)
   requiredSkillsJson String   @default("[]") // [{name, weight, mustHave}]
-  aiExtractionJson   String? // raw validated AI JD analysis
-  aiProviderUsed     String? // which provider produced it (transparency)
   status             String   @default("OPEN") // OPEN | PAUSED | CLOSED
   recruiterId        String
   createdAt          DateTime @default(now())
@@ -259,6 +263,7 @@ model InterviewRequest {
   latestUtc                DateTime
   requiredSkillsJson       String   @default("[]")
   focusTopicsJson          String   @default("[]") // carried from previous-round AI feedback analysis
+  candidateSlotsJson       String   @default("[]") // slots the candidate offered for this round
   priority                 String   @default("NORMAL") // LOW | NORMAL | HIGH
   status                   String   @default("PENDING") // PENDING | PROPOSED | SCHEDULED | COMPLETED | CANCELLED | FAILED
   failureReason            String?
@@ -272,7 +277,6 @@ model InterviewRequest {
   dependents  InterviewRequest[] @relation("RoundDependency")
   proposals   SlotProposal[]
   interviews  Interview[]
-  simulations ScheduleSimulation[]
 
   @@index([status])
   @@index([applicationId])
@@ -286,8 +290,8 @@ model SlotProposal {
   endUtc            DateTime
   score             Float
   riskScore         Float    @default(0)
-  resilienceScore   Float? // from Monte-Carlo simulation (null if not simulated)
   interviewerIdsCsv String
+  matchScoresJson   String   @default("{}") // { interviewerId: matchScore } from the matcher
   reasonsJson       String   @default("[]")
   breakdownJson     String   @default("{}")
   engineUsed        String   @default("ORTOOLS") // ORTOOLS | JS_FALLBACK
@@ -314,7 +318,6 @@ model Interview {
   candidateResponseNote String?
   scheduleScore     Float    @default(0)
   riskScore         Float    @default(0)
-  resilienceScore   Float?
   reasonsJson       String   @default("[]")
   engineUsed        String   @default("ORTOOLS")
   actualStartUtc    DateTime?
@@ -480,8 +483,6 @@ model RecoveryPlan {
   strategy        String // REPLACE_INTERVIEWER | SHIFT_TIME | RESCHEDULE_SLOT | REDUCE_PANEL |
   //                        REGENERATE_MEETING | RETRY_SYNC | NOTIFY_ONLY | CANCEL_AND_REQUEUE
   description     String
-  score           Float // higher is better
-  disruptionScore Float // lower is better
   riskLevel       String // LOW | MEDIUM | HIGH
   payloadJson     String   @default("{}") // machine-readable instructions to apply the plan
   reasonsJson     String   @default("[]")
@@ -535,22 +536,6 @@ model ScheduleScore {
   @@index([interviewId])
 }
 
-model ScheduleSimulation {
-  id              String   @id @default(cuid())
-  requestId       String?
-  interviewId     String?
-  label           String   @default("baseline")
-  iterations      Int
-  resilienceScore Float
-  meanDisruption  Float
-  p95Disruption   Float
-  recoveryRate    Float
-  scenariosJson   String   @default("[]")
-  seed            Int?
-  createdAt       DateTime @default(now())
-
-  request InterviewRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
-}
 
 model AuditLog {
   id           String   @id @default(cuid())

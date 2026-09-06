@@ -34,8 +34,7 @@ const jobSchema = z.object({
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']).default('FULL_TIME'),
   experienceMin: z.coerce.number().min(0).max(50).optional(),
   experienceMax: z.coerce.number().min(0).max(60).optional(),
-  requiredSkills: z.array(skillSchema).max(40).optional(),
-  analyzeWithAi: z.boolean().default(true),
+  requiredSkills: z.array(skillSchema).min(1).max(40),
 });
 
 router.get(
@@ -72,10 +71,7 @@ router.post(
     }
     if (!recruiter) throw forbidden('Recruiter profile missing');
 
-    const { job, ai } = await createJob(
-      { ...req.body, recruiterId: recruiter.id },
-      { actorUserId: req.user.id, actorRole: req.user.role, entity: 'Job' }
-    );
+    const { job } = await createJob({ ...req.body, recruiterId: recruiter.id });
 
     await auditFromRequest(req, {
       action: AUDIT_ACTIONS.JOB_CREATED,
@@ -84,24 +80,14 @@ router.post(
       summary: `Job "${job.title}" created`,
       metadata: { skillCount: job.requiredSkills.length },
     });
-    if (ai) {
-      await auditFromRequest(req, {
-        action: AUDIT_ACTIONS.JD_ANALYZED,
-        entity: 'Job',
-        entityId: job.id,
-        summary: `Job description analysed via ${ai.provider}${ai.fallbackUsed ? ' (deterministic fallback)' : ''}`,
-        metadata: { provider: ai.provider, extraction: ai.extraction },
-      });
-    }
-
-    res.status(201).json({ job, ai });
+    res.status(201).json({ job });
   })
 );
 
 router.put(
   '/:id',
   requireRole(ROLES.RECRUITER, ROLES.ADMIN),
-  validateBody(jobSchema.partial().omit({ analyzeWithAi: true })),
+  validateBody(jobSchema.partial()),
   asyncHandler(async (req, res) => {
     const job = await prisma.job.findUnique({ where: { id: req.params.id }, include: { recruiter: true } });
     if (!job) throw notFound('Job not found');
