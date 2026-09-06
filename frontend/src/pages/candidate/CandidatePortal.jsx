@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
-import SlotSubmissionModal from './SlotSubmissionModal.jsx';
 
 export default function CandidatePortal() {
   const { user } = useAuth();
@@ -24,7 +23,6 @@ export default function CandidatePortal() {
   const [proposals, setProposals] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRequestForSlots, setSelectedRequestForSlots] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -74,18 +72,12 @@ export default function CandidatePortal() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => navigate('/candidate/profile')}
-              className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-xs"
-            >
-              <User className="h-4 w-4 text-brand-600" /> Edit Profile & Skills
-            </button>
+          <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/calendar')}
-              className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-xs"
+              className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
             >
-              <Calendar className="h-4 w-4 text-emerald-600" /> View My Calendar
+              <Calendar className="h-4 w-4 text-brand-600" /> View My Calendar
             </button>
             {requests.length > 0 && (
               <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 border border-amber-200">
@@ -100,8 +92,8 @@ export default function CandidatePortal() {
       {requests.length > 0 && (
         <div className="card p-6 bg-white border border-sky-100 shadow-sm mb-8">
           <h2 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-brand-600" />
-            Pending Interview Requests ({requests.length})
+            <Sparkles className="h-5 w-5 text-amber-600" />
+            Interview Requests Created by Recruiter ({requests.length})
           </h2>
 
           <div className="space-y-4">
@@ -137,7 +129,7 @@ export default function CandidatePortal() {
                   </div>
 
                   <button
-                    onClick={() => setSelectedRequestForSlots(req)}
+                    onClick={() => navigate(`/candidate/availability?requestId=${req.id}`)}
                     className={`btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5 shrink-0 ${
                       isSubmitted ? 'bg-slate-700 hover:bg-slate-800' : ''
                     }`}
@@ -205,12 +197,21 @@ export default function CandidatePortal() {
                     <span className="text-[11px] text-slate-500 font-medium">
                       Panel: {upcomingInterview.panel?.map((p) => p.name).join(', ') || 'Assigned Interviewer'}
                     </span>
-                    <a
-                      href={`/meeting/${upcomingInterview.id}`}
-                      className="btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5"
-                    >
-                      <Video className="h-4 w-4" /> Enter Interview Room
-                    </a>
+                    {upcomingInterview.isJoinable ? (
+                      <a
+                        href={`/meeting/${upcomingInterview.id}`}
+                        className="btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5"
+                      >
+                        <Video className="h-4 w-4" /> Enter Interview Room
+                      </a>
+                    ) : (
+                      <span
+                        className="text-[11px] text-slate-400 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200"
+                        title="The room opens 15 minutes before the interview starts"
+                      >
+                        <Video className="h-4 w-4" /> Room opens 15 min before
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -237,21 +238,6 @@ export default function CandidatePortal() {
             </h3>
 
             <div
-              onClick={() => navigate('/candidate/availability')}
-              className="p-3.5 rounded-xl border border-sky-100 bg-sky-50/50 hover:bg-sky-100/60 transition cursor-pointer flex items-center justify-between"
-            >
-              <div>
-                <span className="font-bold text-xs text-slate-900 block">
-                  Declare Availability Windows
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Interactive weekly picker & Natural Language text
-                </span>
-              </div>
-              <ArrowRight className="h-4 w-4 text-brand-600" />
-            </div>
-
-            <div
               onClick={() => navigate('/candidate/slots')}
               className="p-3.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100/60 transition cursor-pointer flex items-center justify-between"
             >
@@ -266,35 +252,10 @@ export default function CandidatePortal() {
               <ArrowRight className="h-4 w-4 text-purple-600" />
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
-              <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
-                Active Soft Preferences
-              </span>
-              <div className="flex justify-between">
-                <span>Max interviews per day:</span>
-                <strong className="text-slate-900">2</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Minimum buffer between rounds:</span>
-                <strong className="text-slate-900">30 min</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Preferred daily window:</span>
-                <strong className="text-slate-900">09:00 - 20:00 (Local)</strong>
-              </div>
-            </div>
           </div>
         </div>
       </div>
 
-      <SlotSubmissionModal
-        isOpen={Boolean(selectedRequestForSlots)}
-        request={selectedRequestForSlots}
-        onClose={() => setSelectedRequestForSlots(null)}
-        onSuccess={() => {
-          loadData();
-        }}
-      />
     </div>
   );
 }

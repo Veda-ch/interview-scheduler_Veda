@@ -21,9 +21,28 @@ export default function CalendarView() {
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  // Whose declared availability to paint underneath the interviews.
+  const [people, setPeople] = useState([]);
+  const [personKey, setPersonKey] = useState('');
+
+  useEffect(() => {
+    loadPeople();
+  }, []);
+
   useEffect(() => {
     loadCalendarData();
-  }, []);
+  }, [personKey]);
+
+  async function loadPeople() {
+    const [ivs, cands] = await Promise.all([
+      api.get('/interviewers').catch(() => []),
+      api.get('/candidates?take=100').catch(() => ({ items: [] })),
+    ]);
+    setPeople([
+      ...(ivs || []).map((i) => ({ key: `interviewer:${i.id}`, name: i.name, group: 'Interviewers' })),
+      ...((cands?.items) || []).map((c) => ({ key: `candidate:${c.id}`, name: c.name, group: 'Candidates' })),
+    ]);
+  }
 
   async function loadCalendarData() {
     setLoading(true);
@@ -42,8 +61,8 @@ export default function CalendarView() {
           title: `🔒 ${roundName} — ${candidateName}`,
           start: iv.startUtc,
           end: iv.endUtc,
-          backgroundColor: isConfirmed ? '#059669' : '#2563eb',
-          borderColor: isConfirmed ? '#047857' : '#1d4ed8',
+          backgroundColor: '#2563eb',
+          borderColor: isConfirmed ? '#1e3a8a' : '#1d4ed8',
           textColor: '#ffffff',
           extendedProps: {
             roundName,
@@ -56,6 +75,26 @@ export default function CalendarView() {
           },
         };
       });
+
+      // Declared availability for the selected person, painted as background
+      // blocks so interviews sit on top of them rather than competing.
+      let availabilityEvents = [];
+      if (personKey) {
+        const [kind, id] = personKey.split(':');
+        const path = kind === 'interviewer' ? `/interviewers/${id}/availability` : `/candidates/${id}/availability`;
+        const windows = await api.get(path).catch(() => []);
+        availabilityEvents = (windows || []).map((w) => {
+          const blocked = w.kind === 'UNAVAILABLE';
+          return {
+            id: `avail-${w.id}`,
+            start: w.startUtc,
+            end: w.endUtc,
+            display: 'background',
+            backgroundColor: blocked ? '#fecaca' : '#bbf7d0',
+            extendedProps: { isAvailability: true, kind: w.kind },
+          };
+        });
+      }
 
       const formattedRequests = (requests || []).map((req) => {
         const candidateName = req.candidate?.name || 'Candidate';
@@ -80,7 +119,7 @@ export default function CalendarView() {
         };
       });
 
-      setEvents([...formattedInterviews, ...formattedRequests]);
+      setEvents([...availabilityEvents, ...formattedRequests, ...formattedInterviews]);
     } catch (err) {
       console.error('Failed to load calendar events:', err);
     } finally {
@@ -89,6 +128,7 @@ export default function CalendarView() {
   }
 
   function handleEventClick(clickInfo) {
+    if (clickInfo.event.extendedProps?.isAvailability) return;
     setSelectedEvent(clickInfo.event);
   }
 
@@ -102,10 +142,25 @@ export default function CalendarView() {
             Participant Availability & Scheduled Interviews
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Minimum Deliverable 2 • Cross-participant conflict-free calendar layer
+            Booked interviews across everyone, with one person's declared availability underneath.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <select
+            value={personKey}
+            onChange={(e) => setPersonKey(e.target.value)}
+            className="input text-xs py-2 cursor-pointer max-w-[220px]"
+            title="Show declared availability for one person"
+          >
+            <option value="">Show availability for...</option>
+            {['Interviewers', 'Candidates'].map((group) => (
+              <optgroup key={group} label={group}>
+                {people.filter((p) => p.group === group).map((p) => (
+                  <option key={p.key} value={p.key}>{p.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
           <button
             onClick={loadCalendarData}
             className="btn-ghost text-xs py-2 px-3 text-slate-600 flex items-center gap-1.5"
@@ -113,6 +168,25 @@ export default function CalendarView() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 text-xs text-slate-600">
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-6 rounded-sm" style={{ background: '#bbf7d0' }} /> Available
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-6 rounded-sm" style={{ background: '#fecaca' }} /> Unavailable
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-6 rounded-sm" style={{ background: '#2563eb' }} /> Scheduled interview
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-6 rounded-sm" style={{ background: '#f59e0b' }} /> Requested date window
+        </span>
+        {!personKey && (
+          <span className="text-slate-400">Pick a person above to see their availability.</span>
+        )}
       </div>
 
       {/* Calendar Card Container */}

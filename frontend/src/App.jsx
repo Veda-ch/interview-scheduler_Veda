@@ -29,9 +29,9 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f0f9fa]">
+      <div className="min-h-screen flex items-center justify-center bg-[#ebf3fa]">
         <div className="text-center">
-          <div className="h-10 w-10 rounded-full border-4 border-brand-500 border-t-transparent animate-spin mx-auto mb-3" />
+          <div className="h-10 w-10 rounded-full border-4 border-brand-600 border-t-transparent animate-spin mx-auto mb-3" />
           <p className="text-xs font-bold text-slate-700">Loading Smart Interview Scheduler...</p>
         </div>
       </div>
@@ -49,7 +49,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white bg-[#f0f9fa]">
+    <div className="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white bg-[#ebf3fa]">
       {/* Hide Navbar on full-screen meeting room or dedicated Auth pages */}
       {!isMeetingRoom && !isAuthPage && <Navbar />}
 
@@ -211,18 +211,20 @@ export default function App() {
       {!isMeetingRoom && !isAuthPage && (
         <footer className="mt-auto border-t border-sky-100 bg-white/70 py-4 px-6 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-brand-500" />
-            <span className="font-semibold text-slate-700">Smart Interview Scheduling Platform</span>
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="font-semibold text-slate-700">Smart Interview Orchestration Engine</span>
             <span>•</span>
-            <span className="flex items-center gap-1 text-slate-500">
-              Reliable conflict-free scheduling
+            <span className="flex items-center gap-1">
+              <Cpu className="h-3 w-3 text-purple-600" /> OR-Tools CP-SAT Solver Active
             </span>
           </div>
           <div className="flex items-center gap-3 font-medium text-slate-400">
-            <span className="flex items-center gap-1 text-brand-700 font-semibold">
-              <ShieldCheck className="h-3.5 w-3.5 text-brand-600" />
-              Real-Time Calendar Sync
+            <span className="flex items-center gap-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              Double-Booking Serializable Guard
             </span>
+            <span>•</span>
+            <span>Light Blue Theme</span>
           </div>
         </footer>
       )}

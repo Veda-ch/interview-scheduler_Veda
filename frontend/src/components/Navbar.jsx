@@ -15,7 +15,6 @@ import {
   Clock,
   Bell,
   Users,
-  User,
   CheckCircle2,
   ChevronDown,
   UserCheck,
@@ -23,6 +22,7 @@ import {
   Video,
   LogOut,
   LogIn,
+  User,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -86,18 +86,18 @@ export default function Navbar() {
           <div className="flex h-16 items-center justify-between gap-4">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 text-white shadow-md shadow-brand-500/20">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-600 to-sky-500 text-white shadow-md shadow-brand-500/20">
                 <Compass className="h-6 w-6 animate-pulse" />
               </div>
               <div>
                 <span className="font-extrabold text-base tracking-tight text-slate-900 flex items-center gap-1.5">
-                  Interview Scheduler
-                  <span className="text-[10px] uppercase font-bold tracking-widest bg-brand-100 text-brand-800 px-1.5 py-0.5 rounded-md border border-brand-200">
-                    Pro
+                  Interview Control Tower
+                  <span className="text-[10px] uppercase font-bold tracking-widest bg-sky-100 text-brand-700 px-1.5 py-0.5 rounded-md border border-sky-200">
+                    v1.0
                   </span>
                 </span>
                 <p className="text-[11px] font-medium text-slate-500 hidden sm:block">
-                  Smart Interview Scheduling & Coordination Portal
+                  Constraint Scheduling & Self-Healing Control Tower
                 </p>
               </div>
             </div>
@@ -112,38 +112,38 @@ export default function Navbar() {
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
-                    <Layers className="h-4 w-4 text-brand-600" />
-                    Interviews & Pipeline
+                    <Layers className="h-4 w-4 text-sky-600" />
+                    Pipeline & Requests
                   </NavLink>
                   <NavLink
                     to="/jobs"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
                     <Briefcase className="h-4 w-4 text-indigo-600" />
-                    Jobs & Roles
+                    Jobs & Skills
                   </NavLink>
                   <NavLink
                     to="/builder"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
-                    <Sparkles className="h-4 w-4 text-brand-600" />
+                    <Sparkles className="h-4 w-4 text-purple-600" />
                     Schedule Builder
                   </NavLink>
                   <NavLink
@@ -151,13 +151,13 @@ export default function Navbar() {
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
                     <Calendar className="h-4 w-4 text-emerald-600" />
-                    Calendar
+                    Availability Calendar
                   </NavLink>
                   <NavLink
                     to="/control-tower"
@@ -170,7 +170,7 @@ export default function Navbar() {
                     }
                   >
                     <ShieldAlert className="h-4 w-4 text-rose-600" />
-                    System Monitor
+                    Control Tower
                   </NavLink>
                   <NavLink
                     to="/evaluations"
@@ -178,7 +178,7 @@ export default function Navbar() {
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
                           ? 'bg-amber-100 text-amber-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
@@ -190,13 +190,13 @@ export default function Navbar() {
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
-                    <BarChart3 className="h-4 w-4 text-brand-600" />
-                    Analytics & Logs
+                    <BarChart3 className="h-4 w-4 text-amber-600" />
+                    Analytics & Audit
                   </NavLink>
                 </>
               )}
@@ -209,52 +209,39 @@ export default function Navbar() {
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-emerald-100 text-emerald-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
-                    <Calendar className="h-4 w-4 text-brand-600" />
+                    <Calendar className="h-4 w-4 text-emerald-600" />
                     My Interviews
-                  </NavLink>
-                  <NavLink
-                    to="/candidate/availability"
-                    className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                        isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
-                      }`
-                    }
-                  >
-                    <Clock className="h-4 w-4 text-brand-600" />
-                    My Availability
                   </NavLink>
                   <NavLink
                     to="/candidate/slots"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-purple-100 text-purple-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-purple-50/70'
                       }`
                     }
                   >
-                    <Sparkles className="h-4 w-4 text-brand-600" />
-                    Interview Slots
+                    <Sparkles className="h-4 w-4 text-purple-600" />
+                    Choose Time Slot
                   </NavLink>
                   <NavLink
                     to="/candidate/profile"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
                     <User className="h-4 w-4 text-brand-600" />
-                    Profile & Skills
+                    My Profile & Skills
                   </NavLink>
                 </>
               )}
@@ -267,34 +254,34 @@ export default function Navbar() {
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-purple-100 text-purple-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
-                    <Users className="h-4 w-4 text-brand-600" />
-                    My Interviews
+                    <Users className="h-4 w-4 text-purple-600" />
+                    Assigned Interviews
                   </NavLink>
                   <NavLink
                     to="/interviewer/profile"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >
                     <Award className="h-4 w-4 text-brand-600" />
-                    Profile & Availability
+                    My Skills & Availability
                   </NavLink>
                   <NavLink
                     to="/calendar"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         isActive
-                          ? 'bg-brand-100 text-brand-800 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-brand-50/70'
+                          ? 'bg-sky-100 text-brand-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
                       }`
                     }
                   >

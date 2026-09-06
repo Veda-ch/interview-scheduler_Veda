@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import TimezoneCard from '../../components/TimezoneCard.jsx';
@@ -12,54 +13,20 @@ import {
   AlertCircle,
   HelpCircle,
   RefreshCw,
+  ArrowLeft,
+  Send,
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
-/**
- * If two available slots overlap, filter out the shorter one.
- * Blackout windows (UNAVAILABLE) are preserved.
- */
-function filterNonRedundantWindows(rawWindows) {
-  if (!rawWindows || !rawWindows.length) return [];
-
-  const sorted = [...rawWindows].sort((a, b) => {
-    const aStart = new Date(a.startUtc).getTime();
-    const bStart = new Date(b.startUtc).getTime();
-    if (aStart !== bStart) return aStart - bStart;
-    const aDur = new Date(a.endUtc).getTime() - aStart;
-    const bDur = new Date(b.endUtc).getTime() - bStart;
-    return bDur - aDur;
-  });
-
-  return sorted.filter((w, idx) => {
-    if (w.kind === 'UNAVAILABLE') return true;
-
-    const wStart = new Date(w.startUtc).getTime();
-    const wEnd = new Date(w.endUtc).getTime();
-    const wDuration = wEnd - wStart;
-
-    const hasLongerOverlapping = sorted.some((other, otherIdx) => {
-      if (otherIdx === idx) return false;
-      if (other.kind === 'UNAVAILABLE') return false;
-
-      const oStart = new Date(other.startUtc).getTime();
-      const oEnd = new Date(other.endUtc).getTime();
-      const doesOverlap = wStart < oEnd && oStart < wEnd;
-      if (!doesOverlap) return false;
-
-      const oDuration = oEnd - oStart;
-      if (oDuration > wDuration) return true;
-      if (oDuration === wDuration && otherIdx < idx) return true;
-
-      return false;
-    });
-
-    return !hasLongerOverlapping;
-  });
-}
-
 export default function AvailabilityPicker() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const requestId = searchParams.get('requestId');
+  const zone = user?.timezone || 'UTC';
+
+  const [request, setRequest] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [windows, setWindows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,11 +42,14 @@ export default function AvailabilityPicker() {
   const [endTime, setEndTime] = useState('14:00');
   const [kind, setKind] = useState('AVAILABLE');
 
-  const displayedWindows = filterNonRedundantWindows(windows);
-
   useEffect(() => {
+    if (!requestId) return;
     loadAvailability();
-  }, []);
+    api
+      .get(`/interview-requests/${requestId}`)
+      .then(setRequest)
+      .catch(() => setError('That interview request could not be loaded.'));
+  }, [requestId]);
 
   async function loadAvailability() {
     setLoading(true);
@@ -93,6 +63,44 @@ export default function AvailabilityPicker() {
     }
   }
 
+  /**
+   * Offer the declared windows to the recruiter for this round.
+   *
+   * Only windows that fall inside the round's own date range are sent - a
+   * window next month is real availability but is not an answer to this
+   * request, and the solver would discard it anyway.
+   */
+  async function submitForRequest() {
+    if (!request) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const from = DateTime.fromISO(request.earliestUtc);
+      const to = DateTime.fromISO(request.latestUtc);
+      const slots = windows
+        .filter((w) => w.kind !== 'UNAVAILABLE')
+        .filter((w) => DateTime.fromISO(w.startUtc) >= from && DateTime.fromISO(w.endUtc) <= to)
+        .map((w) => ({ startUtc: w.startUtc, endUtc: w.endUtc }));
+
+      if (!slots.length) {
+        setError(
+          `Add at least one window between ${from.setZone(zone).toFormat('LLL dd')} and ${to
+            .setZone(zone)
+            .toFormat('LLL dd')} - that is the range this round has to happen in.`
+        );
+        return;
+      }
+
+      await api.post(`/interview-requests/${requestId}/candidate-slots`, { slots });
+      setSuccess(`${slots.length} time slot(s) sent to your recruiter.`);
+      setTimeout(() => navigate('/candidate'), 1200);
+    } catch (err) {
+      setError(err.message || 'Could not send your time slots');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleAddWindow(e) {
     e.preventDefault();
     setSaving(true);
@@ -100,62 +108,16 @@ export default function AvailabilityPicker() {
     setSuccess(null);
 
     try {
-      const startDt = DateTime.fromISO(`${date}T${startTime}`, {
+      const startUtc = DateTime.fromISO(`${date}T${startTime}`, {
         zone: user?.timezone || 'UTC',
-      });
-      const endDt = DateTime.fromISO(`${date}T${endTime}`, {
+      })
+        .toUTC()
+        .toISO();
+      const endUtc = DateTime.fromISO(`${date}T${endTime}`, {
         zone: user?.timezone || 'UTC',
-      });
-
-      if (endDt <= startDt) {
-        setError('End time must be after start time.');
-        setSaving(false);
-        return;
-      }
-
-      const startUtc = startDt.toUTC().toISO();
-      const endUtc = endDt.toUTC().toISO();
-      const newStartMs = startDt.toMillis();
-      const newEndMs = endDt.toMillis();
-      const newDur = newEndMs - newStartMs;
-
-      // If adding an available/preferred slot, check against existing windows
-      if (kind !== 'UNAVAILABLE') {
-        const overlapping = windows.filter((w) => {
-          if (w.kind === 'UNAVAILABLE') return false;
-          const wStart = new Date(w.startUtc).getTime();
-          const wEnd = new Date(w.endUtc).getTime();
-          return newStartMs < wEnd && wStart < newEndMs;
-        });
-
-        // 1. If an existing overlapping slot is longer or equal, no need to show/add shorter slot
-        const longerExisting = overlapping.find((w) => {
-          const wDur = new Date(w.endUtc).getTime() - new Date(w.startUtc).getTime();
-          return wDur >= newDur;
-        });
-
-        if (longerExisting) {
-          const existingStart = DateTime.fromISO(longerExisting.startUtc, { zone: user?.timezone || 'UTC' }).toFormat('hh:mm a');
-          const existingEnd = DateTime.fromISO(longerExisting.endUtc, { zone: user?.timezone || 'UTC' }).toFormat('hh:mm a');
-          setSuccess(
-            `A longer overlapping available slot (${existingStart} – ${existingEnd}) already covers this time. Shorter slot omitted.`
-          );
-          setSaving(false);
-          return;
-        }
-
-        // 2. If newly entered slot is longer than existing overlapping slots, remove the shorter ones
-        const shorterExisting = overlapping.filter((w) => {
-          const wDur = new Date(w.endUtc).getTime() - new Date(w.startUtc).getTime();
-          return wDur < newDur;
-        });
-
-        if (shorterExisting.length > 0) {
-          await Promise.all(
-            shorterExisting.map((w) => api.del(`/candidates/me/availability/${w.id}`).catch(() => {}))
-          );
-        }
-      }
+      })
+        .toUTC()
+        .toISO();
 
       await api.post('/candidates/me/availability', {
         windows: [{ startUtc, endUtc, kind, timezone: user?.timezone || 'UTC' }],
@@ -204,18 +166,73 @@ export default function AvailabilityPicker() {
     }
   }
 
+  // Availability is only ever declared in answer to a round. Reaching this page
+  // without one means there is nothing to answer, so send them back.
+  if (!requestId) return <Navigate to="/candidate" replace />;
+
+  const windowLabel = request
+    ? `${DateTime.fromISO(request.earliestUtc, { zone }).toFormat('ccc, LLL dd')} - ${DateTime.fromISO(
+        request.latestUtc,
+        { zone }
+      ).toFormat('ccc, LLL dd, yyyy')}`
+    : null;
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Header */}
       <div className="mb-6">
+        <button
+          onClick={() => navigate('/candidate')}
+          className="text-xs font-semibold text-slate-500 hover:text-brand-700 flex items-center gap-1.5 mb-3"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to my interviews
+        </button>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
           <Clock className="h-6 w-6 text-brand-600" />
-          My Interview Availability
+          Provide Your Available Times
         </h1>
         <p className="text-xs text-slate-600 mt-1">
-          Minimum Deliverable 3 • Provide your available hours using interactive picker or natural English
+          Add the times that suit you, then send them to your recruiter.
         </p>
       </div>
+
+      {/* What this is answering */}
+      {request && (
+        <div className="card p-5 bg-white border border-sky-100 shadow-sm mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="font-extrabold text-sm text-slate-900">{request.roundName}</span>
+                <span className="chip chip-blue">{request.interviewType}</span>
+                <span className="chip border-slate-200 bg-slate-100 text-slate-700">
+                  {request.durationMinutes} min
+                </span>
+                {request.status === 'PROPOSED' && (
+                  <span className="chip chip-green">Slots already sent</span>
+                )}
+              </div>
+              <div className="text-xs text-slate-600 font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-brand-600 shrink-0" />
+                <span>
+                  Must happen between <strong className="text-slate-900">{windowLabel}</strong>
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={submitForRequest}
+              disabled={submitting}
+              className="btn-primary text-xs py-2.5 px-4 shadow-sm flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              {submitting ? 'Sending...' : 'Send These Times to Recruiter'}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-3">
+            Only windows inside the date range above are sent. Blackout windows are never sent.
+          </p>
+        </div>
+      )}
 
       {success && (
         <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-fade-in">
@@ -239,15 +256,15 @@ export default function AvailabilityPicker() {
 
           <div className="card p-5 bg-white border border-sky-100 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-lg bg-brand-100 text-brand-700">
-                <Clock className="h-4 w-4" />
+              <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
+                <Sparkles className="h-4 w-4" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  Describe Your Availability
+                  Natural Language Availability (AI)
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Type your free hours or preferred days in plain language
+                  Type your schedule in plain English
                 </p>
               </div>
             </div>
@@ -264,24 +281,24 @@ export default function AvailabilityPicker() {
 
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400">
-                  Converted into structured time slots
+                  Parsed into strict UTC windows
                 </span>
                 <button
                   type="submit"
                   disabled={parsingNlp}
                   className="btn-primary text-xs py-2 px-4 shadow-xs flex items-center gap-1.5"
                 >
-                  <Clock className={`h-3.5 w-3.5 ${parsingNlp ? 'animate-spin' : ''}`} />
-                  {parsingNlp ? 'Applying Schedule...' : 'Apply Schedule'}
+                  <Sparkles className={`h-3.5 w-3.5 ${parsingNlp ? 'animate-spin' : ''}`} />
+                  {parsingNlp ? 'Parsing Schedule...' : 'Parse with AI & Apply'}
                 </button>
               </div>
             </form>
 
-            {/* Schedule Parsing Feedback */}
+            {/* AI Parsing Feedback */}
             {nlpResult && (
-              <div className="mt-4 p-3.5 rounded-xl bg-brand-50/70 border border-brand-100 text-xs text-brand-900 animate-fade-in">
-                <span className="font-bold block mb-1">Schedule Preferences Detected:</span>
-                <div className="space-y-1 text-[11px] text-brand-800">
+              <div className="mt-4 p-3.5 rounded-xl bg-purple-50/70 border border-purple-100 text-xs text-purple-900 animate-fade-in">
+                <span className="font-bold block mb-1">AI Constraints Detected:</span>
+                <div className="space-y-1 text-[11px] text-purple-800">
                   <div>• Active Days: {nlpResult.constraints?.days?.join(', ') || 'Weekdays'}</div>
                   <div>• Daily Window: {nlpResult.constraints?.start_time} to {nlpResult.constraints?.end_time}</div>
                   {nlpResult.constraints?.avoid_days?.length > 0 && (
@@ -369,16 +386,16 @@ export default function AvailabilityPicker() {
                   Active slots considered by the scheduler
                 </p>
               </div>
-              <span className="chip chip-blue">{displayedWindows.length} slots active</span>
+              <span className="chip chip-blue">{windows.length} slots active</span>
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100 pr-1 max-h-[500px]">
-              {displayedWindows.length === 0 ? (
+              {windows.length === 0 ? (
                 <div className="text-center py-16 text-xs text-slate-400">
                   No declared availability windows yet. Add some on the left!
                 </div>
               ) : (
-                displayedWindows.map((w) => {
+                windows.map((w) => {
                   // Render in the candidate's chosen zone, not the browser's.
                   const start = DateTime.fromISO(w.startUtc, { zone: user?.timezone || 'UTC' });
                   const end = DateTime.fromISO(w.endUtc, { zone: user?.timezone || 'UTC' });

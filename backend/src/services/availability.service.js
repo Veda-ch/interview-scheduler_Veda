@@ -27,39 +27,9 @@ import { AVAILABILITY_KIND, ROLES } from '../../../shared/constants.js';
 import { getSettings } from './settings.service.js';
 import { SETTING_KEYS } from '../../../shared/constants.js';
 
-/**
- * If two available slots overlap, filter out the shorter one.
- * Blackout windows (UNAVAILABLE) are preserved.
- */
-export function filterNonRedundantAvailability(rows) {
-  if (!rows || !rows.length) return [];
-  return rows.filter((w, idx) => {
-    if (w.kind === AVAILABILITY_KIND.UNAVAILABLE) return true;
-    const wStart = toDate(w.startUtc).getTime();
-    const wEnd = toDate(w.endUtc).getTime();
-    const wDur = wEnd - wStart;
-
-    const hasLongerOverlapping = rows.some((other, otherIdx) => {
-      if (otherIdx === idx) return false;
-      if (other.kind === AVAILABILITY_KIND.UNAVAILABLE) return false;
-      const oStart = toDate(other.startUtc).getTime();
-      const oEnd = toDate(other.endUtc).getTime();
-      const doesOverlap = wStart < oEnd && oStart < wEnd;
-      if (!doesOverlap) return false;
-
-      const oDur = oEnd - oStart;
-      if (oDur > wDur) return true;
-      if (oDur === wDur && otherIdx < idx) return true;
-      return false;
-    });
-
-    return !hasLongerOverlapping;
-  });
-}
-
 /** Persisted declared windows for a user inside a range (plus a little padding). */
 export async function getDeclaredWindows(userId, rangeStart, rangeEnd) {
-  const rows = await prisma.availabilityWindow.findMany({
+  return prisma.availabilityWindow.findMany({
     where: {
       userId,
       startUtc: { lt: toDate(rangeEnd) },
@@ -67,7 +37,6 @@ export async function getDeclaredWindows(userId, rangeStart, rangeEnd) {
     },
     orderBy: { startUtc: 'asc' },
   });
-  return filterNonRedundantAvailability(rows);
 }
 
 /** Bookings that block a user, padded by `bufferMinutes` on each side. */
@@ -234,79 +203,29 @@ export async function setAvailability(userId, windows, { mode = 'append', timezo
     };
   });
 
-  // Filter any overlapping windows within the submitted batch so shorter slots are omitted.
-  let nonRedundantPrepared = filterNonRedundantAvailability(prepared);
+  // Reject self-overlapping input of the same kind (a common UI bug source).
+  for (let i = 0; i < prepared.length; i += 1) {
+    for (let j = i + 1; j < prepared.length; j += 1) {
+      if (
+        prepared[i].kind === prepared[j].kind &&
+        overlaps(prepared[i].startUtc, prepared[i].endUtc, prepared[j].startUtc, prepared[j].endUtc)
+      ) {
+        throw badRequest('Two of the submitted availability windows overlap each other');
+      }
+    }
+  }
 
   return prisma.$transaction(async (tx) => {
     if (mode === 'replace') {
       await tx.availabilityWindow.deleteMany({
         where: { userId, startUtc: { gte: new Date() } },
       });
-    } else {
-      // In append mode, check against existing available windows
-      const existingAvailable = await tx.availabilityWindow.findMany({
-        where: {
-          userId,
-          kind: { in: [AVAILABILITY_KIND.AVAILABLE, AVAILABILITY_KIND.PREFERRED] },
-        },
-      });
-
-      const toInsert = [];
-      const toDeleteIds = [];
-
-      for (const p of nonRedundantPrepared) {
-        if (p.kind === AVAILABILITY_KIND.UNAVAILABLE) {
-          toInsert.push(p);
-          continue;
-        }
-
-        const pStart = toDate(p.startUtc).getTime();
-        const pEnd = toDate(p.endUtc).getTime();
-        const pDur = pEnd - pStart;
-
-        const overlapping = existingAvailable.filter((e) => {
-          if (toDeleteIds.includes(e.id)) return false;
-          const eStart = toDate(e.startUtc).getTime();
-          const eEnd = toDate(e.endUtc).getTime();
-          return pStart < eEnd && eStart < pEnd;
-        });
-
-        // If an existing available slot already overlaps and is longer or equal, skip inserting p (shorter/duplicate)
-        const hasLonger = overlapping.some((e) => {
-          const eDur = toDate(e.endUtc).getTime() - toDate(e.startUtc).getTime();
-          return eDur >= pDur;
-        });
-
-        if (hasLonger) {
-          continue;
-        }
-
-        // If p is longer than existing overlapping slots, remove the shorter existing slots
-        for (const e of overlapping) {
-          const eDur = toDate(e.endUtc).getTime() - toDate(e.startUtc).getTime();
-          if (eDur < pDur) {
-            toDeleteIds.push(e.id);
-          }
-        }
-
-        toInsert.push(p);
-      }
-
-      if (toDeleteIds.length) {
-        await tx.availabilityWindow.deleteMany({
-          where: { id: { in: toDeleteIds } },
-        });
-      }
-
-      nonRedundantPrepared = toInsert;
     }
-
-    if (nonRedundantPrepared.length) await tx.availabilityWindow.createMany({ data: nonRedundantPrepared });
-    const rows = await tx.availabilityWindow.findMany({
+    if (prepared.length) await tx.availabilityWindow.createMany({ data: prepared });
+    return tx.availabilityWindow.findMany({
       where: { userId, endUtc: { gte: new Date() } },
       orderBy: { startUtc: 'asc' },
     });
-    return filterNonRedundantAvailability(rows);
   });
 }
 
@@ -320,11 +239,10 @@ export async function deleteAvailabilityWindow(userId, windowId) {
 export async function listAvailability(userId, { from, to } = {}) {
   const rangeStart = from ? new Date(from) : new Date(Date.now() - 24 * 60 * 60 * 1000);
   const rangeEnd = to ? new Date(to) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const rows = await prisma.availabilityWindow.findMany({
+  return prisma.availabilityWindow.findMany({
     where: { userId, startUtc: { lt: rangeEnd }, endUtc: { gt: rangeStart } },
     orderBy: { startUtc: 'asc' },
   });
-  return filterNonRedundantAvailability(rows);
 }
 
 /**

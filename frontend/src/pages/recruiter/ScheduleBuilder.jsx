@@ -253,7 +253,7 @@ export default function ScheduleBuilder() {
                   Eligible Interviewers
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Bonus Feature 1 • Ranked by skills & workload
+                  Ranked by skill coverage &amp; workload
                 </p>
               </div>
               <span className="text-xs font-bold text-brand-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
@@ -335,7 +335,7 @@ export default function ScheduleBuilder() {
                 className="btn-primary text-xs py-2.5 px-4 shadow-md shadow-brand-500/25 flex items-center gap-2 shrink-0"
               >
                 <Sparkles className={`h-4 w-4 ${solving ? 'animate-spin' : ''}`} />
-                {solving ? 'Solving CP-SAT Model...' : 'Solve with AI Engine'}
+                {solving ? 'Ranking availabilities...' : 'Rank Availabilities'}
               </button>
             </div>
 
@@ -350,7 +350,7 @@ export default function ScheduleBuilder() {
                     No active proposals generated yet
                   </h4>
                   <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
-                    Click <strong>"Solve with AI Engine"</strong> above to compute the mathematical intersection of candidate & panel availability, evaluate buffer constraints, and generate CP-SAT ranked slots.
+                    Click <strong>"Rank Availabilities"</strong> above to intersect candidate and panel availability, apply buffer and workload constraints, and rank the feasible slots with the CP-SAT solver.
                   </p>
                 </div>
               )}
