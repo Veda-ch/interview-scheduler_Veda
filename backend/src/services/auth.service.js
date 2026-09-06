@@ -201,9 +201,168 @@ export const publicUser = (user) => ({
   timezone: user.timezone,
   phone: user.phone ?? null,
   avatarSeed: user.avatarSeed ?? null,
+  avatarUrl: user.avatarUrl ?? null,
+  googleId: user.googleId ?? null,
   isActive: user.isActive,
   createdAt: user.createdAt,
 });
+
+/** Generate Google OAuth authorization URL with encoded state (role + nonce) */
+export function getGoogleAuthUrl({ role = ROLES.CANDIDATE } = {}) {
+  if (!config.google.configured) {
+    throw badRequest(
+      'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file.'
+    );
+  }
+
+  const validRole = [ROLES.RECRUITER, ROLES.CANDIDATE, ROLES.INTERVIEWER].includes(role)
+    ? role
+    : ROLES.CANDIDATE;
+
+  const statePayload = Buffer.from(
+    JSON.stringify({
+      role: validRole,
+      nonce: crypto.randomBytes(16).toString('hex'),
+      time: Date.now(),
+    })
+  ).toString('base64url');
+
+  const params = new URLSearchParams({
+    client_id: config.google.clientId,
+    redirect_uri: config.google.loginRedirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    prompt: 'select_account',
+    state: statePayload,
+  });
+
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+/** Exchange Google OAuth code for tokens, fetch profile, and login or register user */
+export async function handleGoogleCallback({ code, state }, meta = {}) {
+  if (!config.google.configured) {
+    throw badRequest('Google OAuth is not configured on the server.');
+  }
+  if (!code) {
+    throw badRequest('Missing authorization code from Google.');
+  }
+
+  // Parse state to recover intended role
+  let role = ROLES.CANDIDATE;
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+      if ([ROLES.RECRUITER, ROLES.CANDIDATE, ROLES.INTERVIEWER].includes(decoded.role)) {
+        role = decoded.role;
+      }
+    } catch {
+      // Invalid state json, fall back to default
+    }
+  }
+
+  // 1. Exchange code for tokens
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: config.google.clientId,
+      client_secret: config.google.clientSecret,
+      redirect_uri: config.google.loginRedirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    const errorBody = await tokenRes.text();
+    throw badRequest(`Google token exchange failed: ${tokenRes.status} ${errorBody}`);
+  }
+
+  const tokenData = await tokenRes.json();
+  const googleAccessToken = tokenData.access_token;
+
+  // 2. Fetch user profile from OpenID Connect userinfo endpoint
+  const userinfoRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: `Bearer ${googleAccessToken}` },
+  });
+
+  if (!userinfoRes.ok) {
+    throw badRequest('Failed to fetch user profile from Google.');
+  }
+
+  const googleProfile = await userinfoRes.json();
+  const { sub: googleId, email, name, picture } = googleProfile;
+
+  if (!email) {
+    throw badRequest('Google account did not return a verified email address.');
+  }
+
+  const normalisedEmail = String(email).trim().toLowerCase();
+
+  // 3. Find existing user by googleId or email
+  let user = await prisma.user.findFirst({
+    where: {
+      OR: [{ googleId }, { email: normalisedEmail }],
+    },
+  });
+
+  if (user) {
+    // Existing user: link googleId and avatarUrl if not set
+    const updateData = { lastLoginAt: new Date() };
+    if (!user.googleId) updateData.googleId = googleId;
+    if (!user.avatarUrl && picture) updateData.avatarUrl = picture;
+
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+    });
+
+    if (!user.isActive) throw unauthorized('This account has been deactivated');
+
+    await recordAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: AUDIT_ACTIONS.USER_LOGIN,
+      entity: 'User',
+      entityId: user.id,
+      summary: `${user.name} signed in with Google (${user.role})`,
+      ip: meta.ip,
+    });
+  } else {
+    // New user registration via Google
+    const dummyPasswordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+
+    user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name: (name || 'Google User').trim(),
+          email: normalisedEmail,
+          passwordHash: dummyPasswordHash,
+          role,
+          timezone: 'UTC',
+          googleId,
+          avatarUrl: picture || null,
+          avatarSeed: crypto.randomBytes(4).toString('hex'),
+        },
+      });
+      await createProfileForRole(tx, created, {});
+      return created;
+    });
+
+    await recordAudit({
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: AUDIT_ACTIONS.USER_REGISTERED,
+      entity: 'User',
+      entityId: user.id,
+      summary: `${user.name} registered with Google as ${user.role}`,
+      ip: meta.ip,
+    });
+  }
+
+  return issueSession(user);
+}
 
 /** Full "me" payload including the role-specific profile id the UI needs. */
 export async function getMe(userId) {

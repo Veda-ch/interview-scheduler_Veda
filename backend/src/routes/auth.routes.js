@@ -7,7 +7,10 @@ import {
   logout,
   getMe,
   changePassword,
+  getGoogleAuthUrl,
+  handleGoogleCallback,
 } from '../services/auth.service.js';
+import config from '../config/env.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -84,6 +87,64 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     res.json(await getMe(req.user.id));
+  })
+);
+
+router.get(
+  '/status',
+  asyncHandler(async (req, res) => {
+    res.json({
+      googleConfigured: config.google.configured,
+      googleLoginRedirectUri: config.google.loginRedirectUri,
+      frontendUrl: config.frontendUrl,
+    });
+  })
+);
+
+router.get(
+  '/google/url',
+  asyncHandler(async (req, res) => {
+    const { role } = req.query;
+    const url = getGoogleAuthUrl({ role });
+    res.json({ url });
+  })
+);
+
+router.get(
+  '/google',
+  asyncHandler(async (req, res) => {
+    const { role } = req.query;
+    if (!config.google.configured) {
+      return res.redirect(
+        `${config.frontendUrl}/login?error=${encodeURIComponent(
+          'Google OAuth is not configured yet. Please add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env'
+        )}`
+      );
+    }
+    const url = getGoogleAuthUrl({ role });
+    res.redirect(url);
+  })
+);
+
+router.get(
+  '/google/callback',
+  asyncHandler(async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+
+    if (error) {
+      const msg = error_description || error;
+      return res.redirect(`${config.frontendUrl}/login?error=${encodeURIComponent(msg)}`);
+    }
+
+    try {
+      const session = await handleGoogleCallback({ code, state }, { ip: req.ip });
+      const target = `${config.frontendUrl}/auth/callback?accessToken=${encodeURIComponent(
+        session.accessToken
+      )}&refreshToken=${encodeURIComponent(session.refreshToken)}`;
+      res.redirect(target);
+    } catch (err) {
+      res.redirect(`${config.frontendUrl}/login?error=${encodeURIComponent(err.message)}`);
+    }
   })
 );
 

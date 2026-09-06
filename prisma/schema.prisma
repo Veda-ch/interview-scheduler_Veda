@@ -33,6 +33,8 @@ model User {
   timezone     String   @default("UTC") // IANA zone, e.g. "Asia/Kolkata"
   phone        String?
   avatarSeed   String?
+  avatarUrl    String?
+  googleId     String?  @unique
   isActive     Boolean  @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime @default(now())

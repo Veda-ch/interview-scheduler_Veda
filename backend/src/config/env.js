@@ -85,10 +85,12 @@ export const config = {
     ai: (process.env.AI_PROVIDER || 'mock').toLowerCase(),
   },
 
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, ''),
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    redirectUri: process.env.GOOGLE_REDIRECT_URI || '',
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/calendar/oauth/callback',
+    loginRedirectUri: process.env.GOOGLE_LOGIN_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback',
     get configured() {
       return Boolean(this.clientId && this.clientSecret);
     },
