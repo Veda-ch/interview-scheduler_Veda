@@ -56,7 +56,10 @@ class GeminiProvider(AIProvider):
         body = {
             "contents": [{"parts": [{"text": f"{prompt}\n\nJSON schema properties:\n{schema_hint}"}]}],
             "generationConfig": {
-                "temperature": 0.1,
+                # Greedy, not merely cold. These calls produce scores a recruiter
+                # ranks people by; the same inputs must give the same answer twice.
+                "temperature": 0.0,
+                "topP": 1.0,
                 "responseMimeType": "application/json",
                 "maxOutputTokens": 2048,
             },
@@ -104,7 +107,12 @@ class OllamaProvider(AIProvider):
             "prompt": f"{prompt}\n\nJSON schema properties:\n{schema_hint}",
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.1},
+            # Greedy decoding. At temperature 0.1 Ollama still samples, and the
+            # judgement genuinely moved between identical calls - "PostgreSQL
+            # covers Relational Databases" scored 100, then 80, then 0 across
+            # three runs of the same request. A panel ranking that changes when
+            # you reload the page is a bug, so decode deterministically.
+            "options": {"temperature": 0.0, "top_p": 1.0, "top_k": 1, "seed": 7},
         }
         try:
             with httpx.Client(timeout=self.timeout) as client:

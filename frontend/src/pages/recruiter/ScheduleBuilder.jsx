@@ -85,50 +85,8 @@ export default function ScheduleBuilder() {
   }
 
   // 3. Trigger optimization
-  async function handleSolve() {
-    if (!selectedRequestId) return;
-    setSolving(true);
-    setError(null);
-    setSuccessBooking(null);
-
-    try {
-      const result = await api.post('/scheduler/generate', {
-        requestId: selectedRequestId,
-        persist: true,
-      });
-
-      setProposals(result.proposals || []);
-      setEngineUsed(result.engineUsed || 'ORTOOLS');
-      if (result.matching) {
-        setMatchData(result.matching);
-      }
-    } catch (err) {
-      console.error('Optimizer error:', err);
-      setError(err.message || 'No feasible schedule found. Check availability or constraints.');
-    } finally {
-      setSolving(false);
-    }
-  }
 
   // 4. Confirm proposal (Critical Section)
-  async function handleConfirm(proposalId) {
-    setConfirmingId(proposalId);
-    setError(null);
-    try {
-      const interview = await api.postOnce('/scheduler/confirm', {
-        proposalId,
-        note: 'Confirmed via Recruiter Schedule Builder',
-      });
-      setSuccessBooking(interview);
-      // Reload request to show updated status
-      loadRequestDetails(selectedRequestId);
-    } catch (err) {
-      console.error('Confirmation error:', err);
-      setError(err.message || 'Could not confirm slot. A double-booking conflict was detected.');
-    } finally {
-      setConfirmingId(null);
-    }
-  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
@@ -308,15 +266,16 @@ export default function ScheduleBuilder() {
                 </h3>
               </div>
 
-              {/* Action Button: Solve */}
-              <button
-                onClick={handleSolve}
-                disabled={solving}
-                className="btn-primary text-xs py-2.5 px-4 flex items-center gap-2 shrink-0 font-bold"
-              >
-                <Sparkles className={`h-4 w-4 ${solving ? 'animate-spin' : ''}`} />
-                {solving ? 'Finding available times...' : 'Find Available Times'}
-              </button>
+              {/* Read-only: scheduling runs itself the moment the candidate submits. */}
+              <span className="chip chip-blue shrink-0 font-bold">
+                {request?.status === 'SCHEDULED'
+                  ? 'Booked automatically'
+                  : request?.status === 'WAITING'
+                    ? 'Waiting on an interviewer'
+                    : request?.status === 'SLOTS_OFFERED'
+                      ? 'Candidate is re-picking'
+                      : 'Awaiting candidate times'}
+              </span>
             </div>
 
             {/* Proposals List */}
@@ -326,11 +285,10 @@ export default function ScheduleBuilder() {
                   <div className="mx-auto w-12 h-12 rounded-2xl bg-white shadow-xs flex items-center justify-center text-purple-600 mb-3 border border-slate-200">
                     <Sparkles className="h-6 w-6" />
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    No active proposals generated yet
-                  </h4>
+                  <h4 className="text-sm font-bold text-slate-900">Nothing to show yet</h4>
                   <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
-                    Click <strong>"Find Available Times"</strong> above to check candidate and panel availability, apply buffers, and find the best meeting times.
+                    Scheduling runs by itself as soon as the candidate submits their times. This page
+                    shows what the matcher did and which interviewer it chose.
                   </p>
                 </div>
               )}
@@ -368,19 +326,16 @@ export default function ScheduleBuilder() {
                         </span>
                       </div>
 
-                      {/* Confirm & Book CTA */}
-                      <button
-                        onClick={() => handleConfirm(prop.id)}
-                        disabled={confirmingId === prop.id}
-                        className={`text-xs py-2 px-4 font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs ${
-                          isRank1
-                            ? 'btn-primary'
-                            : 'btn-secondary'
-                        }`}
-                      >
-                        <ShieldCheck className="h-4 w-4" />
-                        {confirmingId === prop.id ? 'Booking...' : 'Confirm & Book'}
-                      </button>
+                      {/* Outcome, not an action - the system already chose. */}
+                      {prop.status === 'ACCEPTED' ? (
+                        <span className="chip chip-green font-bold flex items-center gap-1.5">
+                          <ShieldCheck className="h-3.5 w-3.5" /> Booked
+                        </span>
+                      ) : (
+                        <span className="chip border-slate-200 bg-slate-100 text-slate-600 font-semibold">
+                          {isRank1 ? 'Considered' : 'Alternative'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Time Slot Details */}

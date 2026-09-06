@@ -42,6 +42,9 @@ const SENIORITY_RANK = { JUNIOR: 1, MID: 2, SENIOR: 3, STAFF: 4, PRINCIPAL: 5 };
  * @param {Date} p.rangeEnd
  * @param {string[]} [p.excludeInterviewerIds] e.g. the one who just cancelled
  * @param {string} [p.excludeInterviewId] ignore this interview's own bookings
+ * @param {boolean} [p.ignoreAvailability] rank on skill alone, keeping people who
+ *   declared no free time. Used when we are about to *ask* someone to take a slot
+ *   they never declared, so "has no declared window" must not disqualify them.
  * @returns {Promise<{ranked: object[], rejected: object[], aiProvider: string, fallbackUsed: boolean}>}
  */
 export async function rankInterviewers({
@@ -50,6 +53,7 @@ export async function rankInterviewers({
   rangeEnd,
   excludeInterviewerIds = [],
   excludeInterviewId = null,
+  ignoreAvailability = false,
   limit = 12,
 }) {
   const candidate = request.application.candidate;
@@ -146,7 +150,7 @@ export async function rankInterviewers({
     const free = freeByInterviewer.get(iv.id);
     const freeMinutes = windowMinutes(free.free);
 
-    if (freeMinutes < request.durationMinutes) {
+    if (!ignoreAvailability && freeMinutes < request.durationMinutes) {
       rejected.push({
         id: iv.id,
         name: iv.user.name,

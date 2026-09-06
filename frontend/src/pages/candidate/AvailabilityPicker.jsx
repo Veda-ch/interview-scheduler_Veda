@@ -18,6 +18,11 @@ import {
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
+/** Slots start on the hour or half hour, so those are the only choices. */
+const START_TIMES = Array.from({ length: 48 }, (_, i) =>
+  `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`
+);
+
 export default function AvailabilityPicker() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -39,7 +44,7 @@ export default function AvailabilityPicker() {
   // Manual window form state
   const [date, setDate] = useState(DateTime.now().plus({ days: 1 }).toISODate());
   const [startTime, setStartTime] = useState('10:00');
-  const [endTime, setEndTime] = useState('14:00');
+  const [hours, setHours] = useState(1);
   const [kind, setKind] = useState('AVAILABLE');
 
   useEffect(() => {
@@ -113,9 +118,8 @@ export default function AvailabilityPicker() {
       })
         .toUTC()
         .toISO();
-      const endUtc = DateTime.fromISO(`${date}T${endTime}`, {
-        zone: user?.timezone || 'UTC',
-      })
+      const endUtc = DateTime.fromISO(`${date}T${startTime}`, { zone: user?.timezone || 'UTC' })
+        .plus({ hours })
         .toUTC()
         .toISO();
 
@@ -225,11 +229,12 @@ export default function AvailabilityPicker() {
               className="btn-primary text-xs py-2.5 px-4 shadow-sm flex items-center gap-1.5 shrink-0 disabled:opacity-50"
             >
               <Send className="h-4 w-4" />
-              {submitting ? 'Sending...' : 'Send These Times to Recruiter'}
+              {submitting ? 'Sending...' : 'Send Times & Schedule'}
             </button>
           </div>
           <p className="text-[11px] text-slate-500 mt-3">
-            Only windows inside the date range above are sent. Blackout windows are never sent.
+            Only windows inside the date range above are sent. We book the best match straight away —
+            you will hear back immediately.
           </p>
         </div>
       )}
@@ -332,23 +337,29 @@ export default function AvailabilityPicker() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="label text-[10px]">Start Time</label>
-                  <input
-                    type="time"
+                  <select
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="input text-xs"
+                    className="input text-xs cursor-pointer"
                     required
-                  />
+                  >
+                    {START_TIMES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="label text-[10px]">End Time</label>
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="input text-xs"
+                  <label className="label text-[10px]">Length</label>
+                  <select
+                    value={hours}
+                    onChange={(e) => setHours(Number(e.target.value))}
+                    className="input text-xs cursor-pointer"
                     required
-                  />
+                  >
+                    <option value={1}>1 hour</option>
+                    <option value={2}>2 hours</option>
+                    <option value={3}>3 hours</option>
+                  </select>
                 </div>
               </div>
 

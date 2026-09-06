@@ -31,6 +31,8 @@ import notificationRoutes from './routes/notifications.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import offerRoutes from './routes/offers.routes.js';
+import demoRoutes from './routes/demo.routes.js';
 
 export function createApp() {
   const app = express();
@@ -124,6 +126,8 @@ export function createApp() {
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/audit-logs', auditRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/offers', offerRoutes);
+  app.use('/api/demo', demoRoutes);
 
   app.get('/', (_req, res) =>
     res.json({

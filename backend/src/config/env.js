@@ -121,7 +121,7 @@ export const config = {
 
   scheduling: {
     defaultBufferMinutes: int(process.env.DEFAULT_BUFFER_MINUTES, 15),
-    slotGranularityMinutes: int(process.env.SLOT_GRANULARITY_MINUTES, 15),
+    slotGranularityMinutes: int(process.env.SLOT_GRANULARITY_MINUTES, 30),
     autonomyMaxRisk: (process.env.AUTONOMY_AUTO_APPLY_MAX_RISK || 'LOW').toUpperCase(),
   },
 

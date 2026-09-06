@@ -35,6 +35,10 @@ const jobSchema = z.object({
   experienceMin: z.coerce.number().min(0).max(50).optional(),
   experienceMax: z.coerce.number().min(0).max(60).optional(),
   requiredSkills: z.array(skillSchema).min(1).max(40),
+  // Interviews for this role may only be scheduled inside this range. Every
+  // round raised against an application inherits it.
+  interviewWindowStart: z.string().datetime({ offset: true }).optional(),
+  interviewWindowEnd: z.string().datetime({ offset: true }).optional(),
 });
 
 router.get(

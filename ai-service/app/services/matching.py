@@ -16,7 +16,11 @@ missing LLM degrades the explanation, never the ability to staff a panel.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import time
+from collections import OrderedDict
 from typing import Any
 
 from ..providers.base import structured_call
@@ -27,6 +31,94 @@ from ..schemas import SkillMatchAnalysis
 from .extractors import canonicalize
 
 log = logging.getLogger("ai.matching")
+
+# --------------------------------------------------------------------------- #
+# Result cache
+#
+# Skill coverage is a pure function of (required, offered): the same two skill
+# lists always deserve the same judgement. Ranking a panel calls this once per
+# interviewer, and booking a round ranks more than once, so one request
+# otherwise pays for the same judgement several times over - several seconds
+# each against a local model.
+#
+# Only successful LLM answers are cached. A deterministic fallback is never
+# stored, so a transient model outage cannot pin the rest of the session onto
+# the lexical path.
+# --------------------------------------------------------------------------- #
+# A must-have the interviewer does not cover is disqualifying, not merely a
+# deduction. Without a ceiling, someone who covers three adjacent skills well
+# outscores someone who actually holds the role's core requirement: asked about
+# a Java/Spring Boot role, the model judged "Python covers Spring Boot" at 80,
+# which was enough to rank a data engineer above the backend engineer. Capping
+# keeps anyone missing a must-have below anyone who has them all, while still
+# recording the partial coverage they genuinely bring.
+UNMET_MUST_HAVE_CEILING = 25.0
+
+_CACHE_MAX = 512
+_CACHE_TTL_SECONDS = 1800
+_cache: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
+
+
+def _cache_key(required: list[Any], offered: list[Any]) -> str:
+    def norm_required(items: list[Any]) -> list[list[Any]]:
+        out = []
+        for it in items or []:
+            if isinstance(it, dict):
+                out.append([
+                    canonicalize(it.get("name") or ""),
+                    round(float(it.get("weight", 0.8) or 0.8), 3),
+                    bool(it.get("mustHave", it.get("must_have", True))),
+                ])
+            else:
+                out.append([canonicalize(str(it)), 0.8, True])
+        return sorted(out, key=str)
+
+    def norm_offered(items: list[Any]) -> list[list[Any]]:
+        out = []
+        for it in items or []:
+            if isinstance(it, dict):
+                out.append([canonicalize(it.get("name") or ""), it.get("proficiency"), it.get("years")])
+            else:
+                out.append([canonicalize(str(it)), None, None])
+        return sorted(out, key=str)
+
+    blob = json.dumps(
+        {"required": norm_required(required), "offered": norm_offered(offered)},
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def match_skills_llm(required: list[dict[str, Any]], offered: list[dict[str, Any]]) -> dict[str, Any]:
+    """Cached wrapper around the LLM skill-coverage judgement."""
+    key = _cache_key(required, offered)
+    now = time.monotonic()
+
+    hit = _cache.get(key)
+    if hit is not None:
+        stored_at, value = hit
+        if (now - stored_at) < _CACHE_TTL_SECONDS:
+            _cache.move_to_end(key)
+            return {**value, "cached": True}
+        _cache.pop(key, None)
+
+    result = _match_skills_llm_uncached(required, offered)
+
+    if result.get("used_llm"):
+        _cache[key] = (now, result)
+        _cache.move_to_end(key)
+        while len(_cache) > _CACHE_MAX:
+            _cache.popitem(last=False)
+
+    return {**result, "cached": False}
+
+
+def clear_skill_match_cache() -> int:
+    """Drop every cached judgement. Called when skills change underneath us."""
+    n = len(_cache)
+    _cache.clear()
+    return n
 
 
 def _describe(items: list[Any], keys: tuple[str, ...]) -> str:
@@ -40,7 +132,7 @@ def _describe(items: list[Any], keys: tuple[str, ...]) -> str:
     return "; ".join(out)
 
 
-def match_skills_llm(required: list[dict[str, Any]], offered: list[dict[str, Any]]) -> dict[str, Any]:
+def _match_skills_llm_uncached(required: list[dict[str, Any]], offered: list[dict[str, Any]]) -> dict[str, Any]:
     """LLM skill-coverage judgement, with the deterministic matcher as fallback.
 
     The return shape is identical to `match_skills` so every caller works
@@ -156,6 +248,8 @@ def match_skills_llm(required: list[dict[str, Any]], offered: list[dict[str, Any
         weight_total += weight
 
     overall = (weighted_sum / weight_total) if weight_total else 0.0
+    if unmet:
+        overall = min(overall, UNMET_MUST_HAVE_CEILING)
 
     return {
         "overall": round(overall, 1),
@@ -235,6 +329,8 @@ def match_skills(required: list[dict[str, Any]], offered: list[dict[str, Any]]) 
         weight_total += weight
 
     overall = (weighted_sum / weight_total * 100) if weight_total else 0.0
+    if unmet_must_haves:
+        overall = min(overall, UNMET_MUST_HAVE_CEILING)
 
     return {
         "overall": round(overall, 1),

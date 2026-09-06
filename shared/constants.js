@@ -52,6 +52,10 @@ export const ACTIVE_INTERVIEW_STATUSES = Object.freeze([
 export const REQUEST_STATUS = Object.freeze({
   PENDING: 'PENDING',
   PROPOSED: 'PROPOSED',
+  /** An offer is out with an interviewer; the candidate's slots are held. */
+  WAITING: 'WAITING',
+  /** Nobody could take the candidate's times - they now pick from ours. */
+  SLOTS_OFFERED: 'SLOTS_OFFERED',
   SCHEDULED: 'SCHEDULED',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
@@ -65,6 +69,21 @@ export const CANDIDATE_RESPONSE = Object.freeze({
   DECLINED: 'DECLINED',
   RESCHEDULE_REQUESTED: 'RESCHEDULE_REQUESTED',
 });
+
+/** Lifecycle of a single "will you take this slot?" offer to an interviewer. */
+export const OFFER_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  EXPIRED: 'EXPIRED',
+});
+export const OFFER_STATUS_VALUES = Object.values(OFFER_STATUS);
+
+/** How long an interviewer has to answer an offer before it passes on. */
+export const OFFER_RESPONSE_HOURS = 12;
+
+/** How many interviewers an offer walks down before the candidate re-picks. */
+export const OFFER_MAX_RANK = 2;
 
 export const PANEL_RESPONSE = Object.freeze({
   PENDING: 'PENDING',
@@ -151,6 +170,8 @@ export const NOTIFICATION_TYPES = Object.freeze({
   INTERVIEWER_REPLACED: 'INTERVIEWER_REPLACED',
   INTERVIEW_REMINDER: 'INTERVIEW_REMINDER',
   SLOTS_PROPOSED: 'SLOTS_PROPOSED',
+  SLOT_OFFER_RECEIVED: 'SLOT_OFFER_RECEIVED',
+  SLOTS_UNAVAILABLE: 'SLOTS_UNAVAILABLE',
   RESCHEDULE_REQUESTED: 'RESCHEDULE_REQUESTED',
   INCIDENT_RAISED: 'INCIDENT_RAISED',
   RECOVERY_APPLIED: 'RECOVERY_APPLIED',
@@ -168,6 +189,12 @@ export const AUDIT_ACTIONS = Object.freeze({
   REQUEST_CREATED: 'REQUEST_CREATED',
   INTERVIEWERS_MATCHED: 'INTERVIEWERS_MATCHED',
   SLOTS_GENERATED: 'SLOTS_GENERATED',
+  AUTO_BOOKED: 'AUTO_BOOKED',
+  OFFER_SENT: 'OFFER_SENT',
+  OFFER_ACCEPTED: 'OFFER_ACCEPTED',
+  OFFER_DECLINED: 'OFFER_DECLINED',
+  OFFER_EXPIRED: 'OFFER_EXPIRED',
+  CANDIDATE_CANCELLED: 'CANDIDATE_CANCELLED',
   SLOT_RECOMMENDED: 'SLOT_RECOMMENDED',
   INTERVIEW_CREATED: 'INTERVIEW_CREATED',
   INTERVIEW_CONFIRMED: 'INTERVIEW_CONFIRMED',

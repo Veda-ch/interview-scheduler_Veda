@@ -119,6 +119,7 @@ model InterviewerProfile {
   skills       InterviewerSkill[]
   panelSeats   InterviewPanelMember[]
   feedback     Feedback[]
+  slotOffers   SlotOffer[]
 }
 
 model RecruiterProfile {
@@ -196,7 +197,7 @@ model Booking {
   interviewId String?
   startUtc    DateTime
   endUtc      DateTime
-  kind        String   @default("INTERVIEW") // INTERVIEW | BUFFER | EXTERNAL
+  kind        String   @default("INTERVIEW") // INTERVIEW | BUFFER | EXTERNAL | HOLD
   createdAt   DateTime @default(now())
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -221,6 +222,11 @@ model Job {
   experienceMin      Float    @default(0)
   experienceMax      Float    @default(10)
   requiredSkillsJson String   @default("[]") // [{name, weight, mustHave}]
+  // The date range interviews for this role must happen inside. Every round
+  // raised against an application inherits it, so the window is stated once
+  // per job rather than retyped for each request.
+  interviewWindowStart DateTime?
+  interviewWindowEnd   DateTime?
   status             String   @default("OPEN") // OPEN | PAUSED | CLOSED
   recruiterId        String
   createdAt          DateTime @default(now())
@@ -265,7 +271,12 @@ model InterviewRequest {
   focusTopicsJson          String   @default("[]") // carried from previous-round AI feedback analysis
   candidateSlotsJson       String   @default("[]") // slots the candidate offered for this round
   priority                 String   @default("NORMAL") // LOW | NORMAL | HIGH
-  status                   String   @default("PENDING") // PENDING | PROPOSED | SCHEDULED | COMPLETED | CANCELLED | FAILED
+  // PENDING          -> awaiting the candidate's slots
+  // PROPOSED         -> candidate submitted; matching has run
+  // WAITING          -> an offer is out with an interviewer (slots held)
+  // SLOTS_OFFERED    -> candidate must pick from the interviewer's own free slots
+  // SCHEDULED | COMPLETED | CANCELLED | FAILED
+  status                   String   @default("PENDING")
   failureReason            String?
   dependsOnRequestId       String? // round dependency: cannot start before this one completes
   createdById              String
@@ -277,9 +288,40 @@ model InterviewRequest {
   dependents  InterviewRequest[] @relation("RoundDependency")
   proposals   SlotProposal[]
   interviews  Interview[]
+  slotOffers  SlotOffer[]
 
   @@index([status])
   @@index([applicationId])
+}
+
+/// One "will you take this?" offer sent to a single interviewer.
+///
+/// Raised when no interviewer declared themselves free for any slot the
+/// candidate proposed. The candidate's slots are held while the offer is open;
+/// the interviewer either picks one of them or declines. An offer that is not
+/// answered inside its window expires and passes to the next-ranked
+/// interviewer.
+model SlotOffer {
+  id             String   @id @default(cuid())
+  requestId      String
+  interviewerId  String
+  rank           Int      @default(1) // 1 = best skill match, 2 = next
+  matchScore     Float    @default(0)
+  slotsJson      String   @default("[]") // candidate slots on the table [{startUtc,endUtc}]
+  status         String   @default("PENDING") // PENDING | ACCEPTED | DECLINED | EXPIRED
+  expiresAt      DateTime
+  chosenStartUtc DateTime?
+  chosenEndUtc   DateTime?
+  declineReason  String?
+  respondedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  request     InterviewRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  interviewer InterviewerProfile @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@index([requestId])
+  @@index([interviewerId, status])
 }
 
 model SlotProposal {
