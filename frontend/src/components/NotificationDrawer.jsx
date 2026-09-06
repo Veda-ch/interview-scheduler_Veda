@@ -67,49 +67,49 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
     switch (type) {
       case 'INTERVIEW_SCHEDULED':
       case 'INTERVIEW_CONFIRMED':
-        return <CheckCircle2 className="h-5 w-5 text-emerald-600" />;
+        return <CheckCircle2 className="h-5 w-5 text-purple-800" />;
       case 'INTERVIEW_RESCHEDULED':
       case 'RESCHEDULE_REQUESTED':
-        return <RefreshCw className="h-5 w-5 text-blue-600" />;
+        return <RefreshCw className="h-5 w-5 text-purple-700" />;
       case 'INCIDENT_RAISED':
       case 'APPROVAL_REQUIRED':
-        return <AlertTriangle className="h-5 w-5 text-rose-600" />;
+        return <AlertTriangle className="h-5 w-5 text-purple-950" />;
       case 'INTERVIEW_REMINDER':
-        return <Clock className="h-5 w-5 text-amber-600" />;
+        return <Clock className="h-5 w-5 text-purple-600" />;
       case 'FEEDBACK_REQUESTED':
-        return <MessageSquare className="h-5 w-5 text-purple-600" />;
+        return <MessageSquare className="h-5 w-5 text-purple-800" />;
       default:
-        return <Calendar className="h-5 w-5 text-sky-600" />;
+        return <Calendar className="h-5 w-5 text-purple-700" />;
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/30 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-purple-950/40 backdrop-blur-xs">
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white shadow-2xl border-l border-sky-100 flex flex-col animate-fade-in">
+        <div className="w-screen max-w-md bg-white shadow-2xl border-l border-purple-200 flex flex-col animate-fade-in">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-sky-50/50">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-sky-100 text-sky-700">
+          <div className="px-6 py-4 border-b border-purple-200/80 flex items-center justify-between bg-purple-50/80">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-purple-200 text-purple-950 font-bold">
                 <Bell className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">Notifications</h3>
-                <p className="text-xs text-slate-500">Live dispatch & reminder alerts</p>
+                <h3 className="text-base font-extrabold text-purple-950">Notifications</h3>
+                <p className="text-xs font-semibold text-purple-900/60">Live dispatch & reminder alerts</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {notifications.some((n) => n.status !== 'READ') && (
                 <button
                   onClick={markAllAsRead}
-                  className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline px-2 py-1"
+                  className="text-xs font-bold text-purple-800 hover:text-purple-950 hover:underline px-2 py-1"
                 >
                   Mark all read
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                className="p-1.5 rounded-lg text-purple-400 hover:text-purple-700 hover:bg-purple-100 transition"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -117,9 +117,9 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
           </div>
 
           {/* List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2">
+          <div className="flex-1 overflow-y-auto divide-y divide-purple-100 p-2.5">
             {loading && (
-              <div className="flex justify-center items-center py-16 text-slate-400 text-sm">
+              <div className="flex justify-center items-center py-16 text-purple-400 text-sm font-semibold">
                 <RefreshCw className="h-5 w-5 animate-spin mr-2" />
                 Loading alerts...
               </div>
@@ -127,11 +127,11 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
 
             {!loading && notifications.length === 0 && (
               <div className="text-center py-16 px-4">
-                <div className="mx-auto w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center text-sky-600 mb-3">
+                <div className="mx-auto w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-700 mb-3 border border-purple-200">
                   <Bell className="h-6 w-6" />
                 </div>
-                <h4 className="text-sm font-semibold text-slate-800">No notifications yet</h4>
-                <p className="text-xs text-slate-500 mt-1">
+                <h4 className="text-sm font-bold text-purple-950">No notifications yet</h4>
+                <p className="text-xs text-purple-900/60 mt-1">
                   You will receive invitations, slot confirmations, and reminder alerts here.
                 </p>
               </div>
@@ -147,23 +147,23 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
                     onClick={() => isUnread && markAsRead(n.id)}
                     className={`p-3.5 rounded-xl transition cursor-pointer flex gap-3 ${
                       isUnread
-                        ? 'bg-sky-50/70 hover:bg-sky-100/60 border border-sky-100'
-                        : 'hover:bg-slate-50'
+                        ? 'bg-purple-50/90 hover:bg-purple-100/70 border border-purple-200'
+                        : 'hover:bg-purple-50/50'
                     }`}
                   >
                     <div className="mt-0.5 shrink-0">{getIcon(n.type)}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-xs font-bold text-slate-900 truncate">
+                        <span className="text-xs font-bold text-purple-950 truncate">
                           {n.title}
                         </span>
-                        <span className="text-[11px] text-slate-400 shrink-0">{timeAgo}</span>
+                        <span className="text-[11px] font-semibold text-purple-900/50 shrink-0">{timeAgo}</span>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line line-clamp-3">
+                      <p className="text-xs text-purple-900/80 leading-relaxed whitespace-pre-line line-clamp-3">
                         {n.body}
                       </p>
                       {n.personalized && (
-                        <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                        <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-200">
                           <Sparkles className="h-2.5 w-2.5" /> AI personalized
                         </span>
                       )}
@@ -173,8 +173,8 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
               })}
           </div>
 
-          <div className="p-3 border-t border-slate-100 bg-slate-50/50 text-center">
-            <span className="text-[11px] text-slate-500 font-medium">
+          <div className="p-3 border-t border-purple-200/80 bg-purple-50/50 text-center">
+            <span className="text-[11px] text-purple-900/60 font-semibold">
               In-app, SMTP Email & SMS alerts synced
             </span>
           </div>

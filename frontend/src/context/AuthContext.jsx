@@ -10,7 +10,7 @@ export const DEMO_PERSONAS = {
     email: 'recruiter@scheduler.dev',
     role: 'RECRUITER',
     desc: 'Manages requests, schedules slots & monitors Control Tower',
-    badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+    badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 font-bold',
   },
   CANDIDATE: {
     label: 'Candidate',
@@ -18,7 +18,7 @@ export const DEMO_PERSONAS = {
     email: 'rahul.mehta@example.dev',
     role: 'CANDIDATE',
     desc: 'Self-services availability, books slots & joins interview rooms',
-    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    badgeClass: 'bg-purple-50 text-purple-800 border-purple-200 font-semibold',
   },
   INTERVIEWER: {
     label: 'Interviewer',
@@ -26,7 +26,7 @@ export const DEMO_PERSONAS = {
     email: 'ananya.sharma@company.dev',
     role: 'INTERVIEWER',
     desc: 'Reviews assignments, accepts/declines & submits feedback',
-    badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    badgeClass: 'bg-purple-200/80 text-purple-950 border-purple-300 font-bold',
   },
 };
 

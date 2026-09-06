@@ -31,7 +31,9 @@ export default function InterviewerAssignments() {
   const [declineModalId, setDeclineModalId] = useState(null);
   const [declineReason, setDeclineReason] = useState('');
   const [actionSuccess, setActionSuccess] = useState(null);
+  const [latestAiFeedback, setLatestAiFeedback] = useState(null);
   const [workload, setWorkload] = useState(null);
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
     loadAssignments();
@@ -83,10 +85,30 @@ export default function InterviewerAssignments() {
     }
   }
 
+  // Categorize interviews
+  const needsFeedback = interviews.filter(
+    (iv) => FEEDBACK_STATES.includes(iv.status) && !iv.mySeat?.hasSubmittedFeedback
+  );
+  const upcoming = interviews.filter(
+    (iv) => !FINISHED.includes(iv.status) && !needsFeedback.some((n) => n.id === iv.id)
+  );
+  const completed = interviews.filter(
+    (iv) => FINISHED.includes(iv.status) && !needsFeedback.some((n) => n.id === iv.id)
+  );
+
+  const displayedInterviews =
+    activeTab === 'needsFeedback'
+      ? needsFeedback
+      : activeTab === 'upcoming'
+      ? upcoming
+      : activeTab === 'completed'
+      ? completed
+      : interviews;
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Top Banner */}
-      <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-8">
+      <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
@@ -126,6 +148,78 @@ export default function InterviewerAssignments() {
         <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-fade-in">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{actionSuccess}</span>
+        </div>
+      )}
+
+      {/* AI Feedback Analysis & Next Round Propagation Toast */}
+      {latestAiFeedback && (
+        <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-purple-50 via-indigo-50/50 to-white border border-purple-200 text-xs text-purple-900 shadow-md animate-fade-in relative">
+          <button
+            onClick={() => setLatestAiFeedback(null)}
+            className="absolute top-3.5 right-3.5 text-purple-400 hover:text-purple-700 text-xs font-bold p-1 rounded-lg hover:bg-purple-100/60 transition"
+          >
+            ✕
+          </button>
+          <div className="flex items-center gap-2 font-extrabold mb-2 text-purple-950 text-sm">
+            <Sparkles className="h-4 w-4 text-purple-600" />
+            AI Feedback Analysis & Adaptive Next-Round Propagation Complete
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-white/80 p-3.5 rounded-xl border border-purple-100 mb-2">
+            <div>
+              <span className="font-bold text-slate-700 block mb-1">Identified Candidate Strengths:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(latestAiFeedback.analysis?.strengths || []).map((s, idx) => (
+                  <span key={idx} className="chip chip-green text-[10px] font-semibold">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span className="font-bold text-slate-700 block mb-1">Detected Skill Gaps:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {(latestAiFeedback.analysis?.skill_gaps || []).map((g, idx) => (
+                  <span key={idx} className="chip chip-amber text-[10px] font-semibold">
+                    {g}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-purple-800">
+            <strong>Summary:</strong> {latestAiFeedback.analysis?.summary || 'Analysis recorded.'}
+          </p>
+          {latestAiFeedback.propagation?.applied && (
+            <div className="mt-2 text-[11px] text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Next round updated! Skill gaps were automatically injected as focus topics for subsequent interview rounds.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action Required Callout if feedback is pending */}
+      {needsFeedback.length > 0 && activeTab !== 'needsFeedback' && (
+        <div className="card p-4 bg-amber-50/90 border border-amber-200 shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-extrabold text-amber-950">
+                Action Required: {needsFeedback.length} Completed Interview{needsFeedback.length > 1 ? 's' : ''} Awaiting Your Evaluation
+              </h3>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                The interview has concluded. Submitting your feedback allows our AI to detect strengths & gaps, automatically tuning next-round focus topics.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('needsFeedback')}
+            className="btn-primary text-xs py-1.5 px-3.5 bg-amber-600 hover:bg-amber-700 text-white shrink-0 self-start sm:self-auto flex items-center gap-1.5 shadow-xs font-bold"
+          >
+            Review & Submit Feedback ({needsFeedback.length})
+          </button>
         </div>
       )}
 
@@ -177,20 +271,96 @@ export default function InterviewerAssignments() {
         </div>
       )}
 
+      {/* Category Tabs */}
+      <div className="flex items-center gap-2 border-b border-sky-100 pb-3 mb-5 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'all'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          All Assignments
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'all' ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            {interviews.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('needsFeedback')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'needsFeedback'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : needsFeedback.length > 0
+              ? 'text-amber-900 bg-amber-100/80 hover:bg-amber-100 border border-amber-300 font-extrabold'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
+          Pending Feedback
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'needsFeedback' ? 'bg-amber-800 text-white' : 'bg-amber-200 text-amber-900 font-extrabold'}`}>
+            {needsFeedback.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('upcoming')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'upcoming'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          Upcoming
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'upcoming' ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            {upcoming.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('completed')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'completed'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Past & Completed
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'completed' ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            {completed.length}
+          </span>
+        </button>
+      </div>
+
       {/* Assignments List */}
       <div className="space-y-4">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
           <Users className="h-5 w-5 text-purple-600" />
-          Upcoming Panel Appointments ({interviews.length})
+          {activeTab === 'needsFeedback'
+            ? `Interviews Awaiting Your Feedback (${needsFeedback.length})`
+            : activeTab === 'upcoming'
+            ? `Upcoming Panel Appointments (${upcoming.length})`
+            : activeTab === 'completed'
+            ? `Past & Concluded Interviews (${completed.length})`
+            : `All Panel Assignments (${interviews.length})`}
         </h2>
 
-        {interviews.length === 0 && !loading && (
+        {displayedInterviews.length === 0 && !loading && (
           <div className="card p-12 text-center bg-white border border-sky-100 text-xs text-slate-400">
-            No interviews currently assigned to your panel.
+            {activeTab === 'needsFeedback'
+              ? 'No pending feedback evaluations. You are all caught up!'
+              : activeTab === 'upcoming'
+              ? 'No upcoming interviews scheduled for your panel right now.'
+              : activeTab === 'completed'
+              ? 'No past interviews recorded yet.'
+              : 'No interviews currently assigned to your panel.'}
           </div>
         )}
 
-        {interviews.map((iv) => {
+        {displayedInterviews.map((iv) => {
           const start = DateTime.fromISO(iv.startUtc, { zone: user?.timezone || 'UTC' });
           const end = DateTime.fromISO(iv.endUtc, { zone: user?.timezone || 'UTC' });
           const candidate = iv.candidate?.name || 'Candidate';
@@ -211,7 +381,11 @@ export default function InterviewerAssignments() {
           return (
             <div
               key={iv.id}
-              className="card p-5 bg-white border border-sky-100 shadow-sm hover:border-sky-200 transition"
+              className={`card p-5 bg-white border shadow-sm transition ${
+                canGiveFeedback
+                  ? 'border-amber-300 ring-1 ring-amber-200/50 hover:border-amber-400'
+                  : 'border-sky-100 hover:border-sky-200'
+              }`}
             >
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 {/* Info Left */}
@@ -221,9 +395,25 @@ export default function InterviewerAssignments() {
                       {iv.round?.name || 'Interview'}
                     </span>
                     <span className="chip chip-blue">{iv.round?.type}</span>
-                    <span className="chip border-slate-200 bg-slate-100 text-slate-700">{iv.status}</span>
+                    <span className={`chip border-slate-200 ${iv.status === 'COMPLETED' ? 'bg-slate-100 text-slate-700' : 'bg-purple-50 text-purple-700'}`}>
+                      {iv.status}
+                    </span>
 
-                    {/* This interviewer's own response, not the interview status. */}
+                    {/* Feedback Status */}
+                    {canGiveFeedback && (
+                      <span className="chip bg-amber-100 text-amber-900 border-amber-300 font-extrabold flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="h-3 w-3 text-amber-600" />
+                        Feedback Pending
+                      </span>
+                    )}
+                    {hasFeedback && (
+                      <span className="chip chip-green font-bold flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                        Feedback Submitted
+                      </span>
+                    )}
+
+                    {/* Interviewer seat response */}
                     {seatStatus === 'ACCEPTED' && (
                       <span className="chip chip-green font-bold">You accepted</span>
                     )}
@@ -242,7 +432,6 @@ export default function InterviewerAssignments() {
                         Match {Math.round(matchScore)}%
                       </span>
                     )}
-                    {hasFeedback && <span className="chip chip-green">Feedback submitted</span>}
                   </div>
 
                   <h3 className="text-base font-bold text-slate-900">
@@ -259,6 +448,27 @@ export default function InterviewerAssignments() {
                       {start.toFormat('hh:mm a')} – {end.toFormat('hh:mm a')} ({user?.timezone || 'IST'})
                     </span>
                   </div>
+
+                  {/* Summary of feedback if submitted */}
+                  {hasFeedback && Array.isArray(iv.feedback) && iv.feedback.length > 0 && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex flex-wrap items-center gap-3">
+                      <span>Overall Rating: <strong className="text-slate-900">{iv.feedback[0].overallRating}/5</strong></span>
+                      <span>•</span>
+                      <span>Recommendation: <strong className="text-brand-700">{iv.feedback[0].recommendation}</strong></span>
+                      {iv.feedback[0].aiAnalysis?.strengths?.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-emerald-700">Strengths: {iv.feedback[0].aiAnalysis.strengths.slice(0, 3).join(', ')}</span>
+                        </>
+                      )}
+                      {iv.feedback[0].aiAnalysis?.skill_gaps?.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-amber-800 font-semibold">Gaps: {iv.feedback[0].aiAnalysis.skill_gaps.slice(0, 2).join(', ')}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions Right */}
@@ -270,21 +480,21 @@ export default function InterviewerAssignments() {
                     >
                       <Video className="h-3.5 w-3.5" /> Join Room
                     </a>
-                  ) : (
+                  ) : !FINISHED.includes(iv.status) ? (
                     <span
                       className="text-[11px] text-slate-400 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200"
                       title="The room opens 15 minutes before the interview starts"
                     >
                       <Video className="h-3.5 w-3.5" /> Opens 15 min before
                     </span>
-                  )}
+                  ) : null}
 
                   {canGiveFeedback && (
                     <button
                       onClick={() => setSelectedInterviewForFeedback(iv)}
-                      className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5"
+                      className="btn-primary bg-purple-600 hover:bg-purple-700 text-white text-xs py-2 px-4 shadow-sm flex items-center gap-1.5 font-bold"
                     >
-                      <MessageSquare className="h-3.5 w-3.5 text-purple-600" /> Submit Feedback
+                      <MessageSquare className="h-3.5 w-3.5" /> Submit Feedback
                     </button>
                   )}
 
@@ -355,8 +565,12 @@ export default function InterviewerAssignments() {
         isOpen={Boolean(selectedInterviewForFeedback)}
         interview={selectedInterviewForFeedback}
         onClose={() => setSelectedInterviewForFeedback(null)}
-        onSuccess={() => {
-          setActionSuccess('Feedback submitted. The AI analysis of strengths and gaps appears on the Evaluations page.');
+        onSuccess={(result) => {
+          setActionSuccess('Feedback submitted successfully! AI analysis extracted candidate strengths and skill gaps.');
+          if (result?.analysis) {
+            setLatestAiFeedback(result);
+          }
+          loadAssignments();
         }}
       />
     </div>

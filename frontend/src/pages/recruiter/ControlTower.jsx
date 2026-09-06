@@ -56,71 +56,74 @@ export default function ControlTower() {
   function getSeverityBadge(severity) {
     switch (severity) {
       case 'CRITICAL':
-        return 'bg-red-100 text-red-900 border-red-300';
+        return 'chip chip-red text-[10px] font-bold';
       case 'HIGH':
-        return 'bg-rose-100 text-rose-800 border-rose-200';
+        return 'chip chip-amber text-[10px] font-bold';
       case 'MEDIUM':
-        return 'bg-amber-100 text-amber-900 border-amber-200';
+        return 'chip chip-blue text-[10px] font-semibold';
       default:
-        return 'bg-sky-100 text-sky-800 border-sky-200';
+        return 'chip border-slate-200 bg-slate-50 text-slate-700 text-[10px] font-semibold';
     }
   }
 
   function getRiskBadge(risk) {
     switch (risk) {
       case 'LOW':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+        return 'chip chip-green text-[10px] font-bold';
       case 'MEDIUM':
-        return 'bg-amber-100 text-amber-900 border-amber-200';
+        return 'chip chip-amber text-[10px] font-bold';
       default:
-        return 'bg-rose-100 text-rose-900 border-rose-200';
+        return 'chip chip-red text-[10px] font-bold';
     }
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-      {/* Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <ShieldAlert className="h-7 w-7 text-rose-600" />
-            Control Tower & Self-Healing Monitor
-          </h1>
-          <p className="text-sm text-slate-600 mt-1">
-            Minimum Deliverable 7 • Continuous disruption detection, cascade impact analysis & bounded recovery autonomy
-          </p>
+      {/* Top Banner */}
+      <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-800 bg-purple-100/70 px-2.5 py-0.5 rounded-full border border-purple-200">
+                System Monitoring
+              </span>
+              <h1 className="text-2xl font-extrabold text-slate-900 mt-1">
+                Schedule Health & Conflict Monitor
+              </h1>
+            </div>
+          </div>
+          <button
+            onClick={loadIncidents}
+            className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold self-start sm:self-auto"
+          >
+            <RefreshCw className={`h-4 w-4 text-purple-600 ${loading ? 'animate-spin' : ''}`} /> Refresh Alerts
+          </button>
         </div>
-        <button
-          onClick={loadIncidents}
-          className="btn-ghost text-xs py-2 px-3 text-slate-600 flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh Incidents
-        </button>
       </div>
 
       {/* Autonomy Policy Banner */}
-      <div className="card p-4 bg-white border border-sky-100 shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="card p-4 bg-white border border-sky-100 shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-sky-100 text-brand-700">
+          <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600 border border-purple-100">
             <Shield className="h-5 w-5" />
           </div>
           <div>
             <span className="font-bold text-xs text-slate-900 block">
-              Active Autonomy Policy: <span className="text-emerald-700">LOW_RISK_AUTO_APPLY</span>
+              Smart Rescheduling: <span className="text-purple-700 font-extrabold">Auto-Resolve Low-Impact Changes</span>
             </span>
-            <p className="text-[11px] text-slate-500">
-              Low-risk replacements & shifts are applied autonomously; medium/high risk disruption plans wait for recruiter approval.
-            </p>
           </div>
         </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-          Guardrails Active
+        <span className="chip chip-green font-bold shrink-0">
+          Protection Active
         </span>
       </div>
 
       {/* Success Notification */}
       {actionSuccess && (
-        <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2">
+        <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2.5 animate-fade-in shadow-xs">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{actionSuccess}</span>
         </div>
@@ -129,13 +132,13 @@ export default function ControlTower() {
       {/* Incidents List */}
       <div className="space-y-6">
         {incidents.length === 0 && !loading && (
-          <div className="card p-16 text-center bg-white border border-sky-100">
-            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+          <div className="card p-16 text-center bg-white border border-sky-100 rounded-2xl shadow-xs">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-3">
               <CheckCircle2 className="h-6 w-6" />
             </div>
             <h3 className="text-base font-bold text-slate-900">All Systems Nominal</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-              Zero active incidents or scheduling conflicts detected. The background monitor polls every 60 seconds to detect cancellations, overruns, and panel dropouts.
+            <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-medium">
+              Zero active scheduling conflicts or calendar overlaps. The monitor continuously checks for cancellations, delays, and panel changes.
             </p>
           </div>
         )}
@@ -148,37 +151,33 @@ export default function ControlTower() {
           return (
             <div
               key={inc.id}
-              className="card bg-white border border-slate-200/80 shadow-sm overflow-hidden"
+              className="card bg-white border border-sky-100 shadow-sm overflow-hidden rounded-2xl transition-all"
             >
               {/* Incident Header */}
-              <div className="p-5 border-b border-slate-100 bg-sky-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0 mt-0.5">
+                  <div className="p-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 shrink-0 mt-0.5">
                     <AlertTriangle className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${getSeverityBadge(
-                          inc.severity
-                        )}`}
-                      >
-                        {inc.severity} SEVERITY
+                      <span className={getSeverityBadge(inc.severity)}>
+                        {inc.severity} PRIORITY
                       </span>
-                      <span className="text-xs font-bold text-slate-800">{inc.type}</span>
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-xs font-bold text-slate-900">{inc.type}</span>
+                      <span className="text-[11px] text-slate-500 font-medium">
                         • Detected {DateTime.fromISO(inc.detectedAt).toRelative()}
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-slate-900 mt-1">{inc.title}</h3>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed font-medium">
                       {inc.description}
                     </p>
                   </div>
                 </div>
 
                 <div className="shrink-0 text-right">
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="chip border-slate-200 bg-white text-slate-700 font-semibold shadow-xs">
                     Status: {inc.status}
                   </span>
                 </div>
@@ -186,14 +185,14 @@ export default function ControlTower() {
 
               {/* Recovery Options Section */}
               <div className="p-5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3.5 flex items-center gap-1.5">
                   <Zap className="h-3.5 w-3.5 text-purple-600" />
-                  Self-Healing Recovery Plans ({plans.length})
+                  Recommended Resolution Plans ({plans.length})
                 </h4>
 
                 {plans.length === 0 ? (
-                  <p className="text-xs text-slate-400">
-                    Control Tower analyzing available recovery alternatives...
+                  <p className="text-xs text-slate-500 font-medium">
+                    Searching for available alternative interviewers and time slots...
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -202,50 +201,46 @@ export default function ControlTower() {
                       return (
                         <div
                           key={p.id || pIdx}
-                          className={`p-4 rounded-xl border transition flex flex-col justify-between ${
+                          className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
                             isRec
-                              ? 'border-brand-300 bg-sky-50/50 shadow-xs'
-                              : 'border-slate-200 bg-white'
+                              ? 'border-purple-200 bg-purple-50/40 shadow-xs'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}
                         >
                           <div>
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span
-                                className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${getRiskBadge(
-                                  p.riskLevel
-                                )}`}
-                              >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className={getRiskBadge(p.riskLevel)}>
                                 {p.riskLevel} RISK
                               </span>
                               {isRec && (
-                                <span className="text-[10px] font-extrabold uppercase text-brand-700 bg-white px-2 py-0.5 rounded border border-brand-200">
+                                <span className="chip chip-purple text-[10px]">
                                   ★ Recommended
                                 </span>
                               )}
                             </div>
                             <h5 className="font-bold text-sm text-slate-900">{p.description}</h5>
-                            <div className="mt-2 text-[11px] text-slate-500 space-y-0.5">
-                              <div>Strategy: <strong className="text-slate-700">{p.strategy}</strong></div>
-                              <div>Disruption score: <strong>{p.disruptionScore || 15}m</strong></div>
+                            <div className="mt-2.5 text-[11px] text-slate-500 space-y-0.5 font-medium">
+                              <div>Strategy: <strong className="text-slate-800 font-bold">{p.strategy}</strong></div>
+                              <div>Schedule impact: <strong className="text-slate-800 font-bold">{p.disruptionScore || 15} min</strong></div>
                             </div>
                           </div>
 
                           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end">
                             {inc.status === 'RESOLVED' ? (
-                              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                                <CheckCircle2 className="h-4 w-4" /> Plan Applied
+                              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Plan Applied
                               </span>
                             ) : (
                               <button
                                 onClick={() => handleApprovePlan(inc.id, p.id)}
                                 disabled={isActing}
-                                className={`text-xs py-1.5 px-3.5 font-bold rounded-lg transition ${
+                                className={`text-xs py-1.5 px-3.5 font-bold rounded-xl transition-all ${
                                   isRec
                                     ? 'btn-primary shadow-xs'
-                                    : 'btn-ghost'
+                                    : 'btn-secondary'
                                 }`}
                               >
-                                {isActing ? 'Applying...' : 'Approve & Apply Plan'}
+                                {isActing ? 'Applying...' : 'Accept & Reschedule'}
                               </button>
                             )}
                           </div>

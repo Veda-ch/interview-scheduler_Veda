@@ -20,6 +20,7 @@
     "db:seed": "node prisma/seed.js",
     "db:seed:blank": "node prisma/seed.js",
     "db:seed:demo": "node prisma/seed-demo-backup.js",
+    "db:seed:feedback": "node scripts/seed-feedback-demo.js",
     "db:studio": "prisma studio",
     "db:use-postgres": "node scripts/set-db-provider.js postgresql",
     "db:use-sqlite": "node scripts/set-db-provider.js sqlite",
