@@ -63,7 +63,7 @@ export default function InterviewerProfile() {
 
   // Profile details + working hours
   const [details, setDetails] = useState({
-    title: '', department: '', seniority: 'MID', yearsExperience: 0, bioText: '',
+    title: '', department: '', seniority: 'MID', yearsExperience: 0, bioText: '', phone: '',
   });
   const [hours, setHours] = useState({ start: '09:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] });
   const [limits, setLimits] = useState({ maxInterviewsPerDay: 3, maxInterviewsPerWeek: 10 });
@@ -115,6 +115,7 @@ export default function InterviewerProfile() {
       seniority: me.seniority || 'MID',
       yearsExperience: me.yearsExperience ?? 0,
       bioText: me.bioText || '',
+      phone: me.phone || '',
     });
     setHours({
       start: minutesToHhmm(me.workingHours?.startMinute ?? 540),
@@ -149,6 +150,7 @@ export default function InterviewerProfile() {
         return;
       }
       const updated = await api.put('/interviewers/me', {
+        phone: details.phone || null,
         title: details.title || null,
         department: details.department || null,
         seniority: details.seniority,
@@ -410,6 +412,16 @@ export default function InterviewerProfile() {
                   step="0.5"
                   value={details.yearsExperience}
                   onChange={(e) => setDetails({ ...details, yearsExperience: e.target.value })}
+                  className="input text-xs"
+                />
+              </div>
+              <div className="col-span-6">
+                <label className="label text-[10px]">Contact Phone</label>
+                <input
+                  type="tel"
+                  value={details.phone}
+                  onChange={(e) => setDetails({ ...details, phone: e.target.value })}
+                  placeholder="e.g. +91 98765 43210"
                   className="input text-xs"
                 />
               </div>

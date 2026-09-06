@@ -113,7 +113,7 @@ export const config = {
   twilio: {
     sid: process.env.TWILIO_ACCOUNT_SID || '',
     token: process.env.TWILIO_AUTH_TOKEN || '',
-    from: process.env.TWILIO_FROM || '',
+    from: process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_FROM || '',
     get configured() {
       return Boolean(this.sid && this.token && this.from);
     },

@@ -185,12 +185,41 @@ export async function notify({ userId, type, context = {}, channels = ['IN_APP',
     }
   }
 
-  if (channels.includes('SMS') && user.phone) {
-    try {
-      const result = await provider.sendSms({ to: user.phone, body: `${rendered.title}\n${rendered.body.slice(0, 300)}` });
-      delivery.push({ channel: 'SMS', ...result });
-    } catch (err) {
-      delivery.push({ channel: 'SMS', ok: false, error: err.message });
+  if (channels.includes('SMS')) {
+    if (!user.phone) {
+      const reason = 'Recipient has no phone number';
+      logger.warn('SMS notification skipped because recipient has no phone number', { userId, type });
+      delivery.push({ channel: 'SMS', ok: false, skipped: true, reason });
+      await prisma.notification.create({
+        data: {
+          userId, type, channel: 'SMS', title: rendered.title, body: rendered.body,
+          status: 'FAILED', errorMessage: reason,
+          relatedEntity: relatedEntity ?? null, relatedId: relatedId ?? null,
+        },
+      });
+    } else {
+      try {
+        const result = await provider.sendSms({ to: user.phone, body: `${rendered.title}\n${rendered.body.slice(0, 300)}` });
+        delivery.push({ channel: 'SMS', ...result });
+        await prisma.notification.create({
+          data: {
+            userId, type, channel: 'SMS', title: rendered.title, body: rendered.body,
+            status: result.ok ? 'SENT' : 'FAILED', sentAt: result.ok ? new Date() : null,
+            errorMessage: result.ok ? null : result.reason || 'send failed',
+            relatedEntity: relatedEntity ?? null, relatedId: relatedId ?? null,
+          },
+        });
+      } catch (err) {
+        logger.error('SMS delivery failed', { userId, type, error: err.message });
+        delivery.push({ channel: 'SMS', ok: false, error: err.message });
+        await prisma.notification.create({
+          data: {
+            userId, type, channel: 'SMS', title: rendered.title, body: rendered.body,
+            status: 'FAILED', errorMessage: err.message.slice(0, 300),
+            relatedEntity: relatedEntity ?? null, relatedId: relatedId ?? null,
+          },
+        });
+      }
     }
   }
 

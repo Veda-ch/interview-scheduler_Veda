@@ -203,8 +203,8 @@ async function detectOverload() {
 
 /** Not an incident: proactive reminders for interviews starting soon. */
 async function sendReminders(now) {
-  const from = addMinutes(now, 55);
-  const to = addMinutes(now, 65);
+  const from = addMinutes(now, 14);
+  const to = addMinutes(now, 16);
 
   const soon = await prisma.interview.findMany({
     where: { status: { in: ACTIVE_INTERVIEW_STATUSES }, startUtc: { gte: from, lte: to } },
@@ -212,20 +212,21 @@ async function sendReminders(now) {
   });
 
   for (const iv of soon) {
-    const already = await prisma.notification.findFirst({
-      where: { relatedId: iv.id, type: NOTIFICATION_TYPES.INTERVIEW_REMINDER, channel: 'IN_APP' },
-    });
-    if (already) continue;
-
     const targets = [
       { userId: iv.request.application.candidate.userId, zone: iv.request.application.candidate.user.timezone },
       ...iv.panel.map((p) => ({ userId: p.interviewer.userId, zone: p.interviewer.user.timezone })),
     ];
     for (const t of targets) {
+      const already = await prisma.notification.findFirst({
+        where: { userId: t.userId, relatedId: iv.id, type: NOTIFICATION_TYPES.INTERVIEW_REMINDER, channel: 'SMS' },
+      });
+      if (already) continue;
+
       await notify({
         userId: t.userId,
         type: NOTIFICATION_TYPES.INTERVIEW_REMINDER,
         context: interviewContext(iv, { viewerTimezone: t.zone }),
+        channels: ['IN_APP', 'SMS'],
         relatedEntity: 'Interview',
         relatedId: iv.id,
       });
