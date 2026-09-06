@@ -217,19 +217,6 @@ export default function Navbar() {
                     My Interviews
                   </NavLink>
                   <NavLink
-                    to="/candidate/availability"
-                    className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                        isActive
-                          ? 'bg-sky-100 text-brand-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-sky-50/70'
-                      }`
-                    }
-                  >
-                    <Clock className="h-4 w-4 text-brand-600" />
-                    My Availability
-                  </NavLink>
-                  <NavLink
                     to="/candidate/slots"
                     className={({ isActive }) =>
                       `px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${

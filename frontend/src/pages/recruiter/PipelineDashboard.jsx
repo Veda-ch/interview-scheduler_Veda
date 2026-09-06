@@ -353,9 +353,17 @@ export default function PipelineDashboard() {
                       </td>
                       <td className="td">{getStatusChip(req.status)}</td>
                       <td className="td text-right">
+                        {/* Nothing can be scheduled until the candidate has offered
+                            times - the solver has no feasible space without them. */}
                         <button
                           onClick={() => navigate(`/builder?requestId=${req.id}`)}
-                          className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 ml-auto shadow-xs"
+                          disabled={req.status === 'PENDING'}
+                          title={
+                            req.status === 'PENDING'
+                              ? 'Waiting for the candidate to provide their available time slots'
+                              : 'Open the schedule builder for this round'
+                          }
+                          className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 ml-auto shadow-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                         >
                           <Sparkles className="h-3.5 w-3.5" />
                           <span>Schedule Slot</span>

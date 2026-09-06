@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import TimezoneCard from '../../components/TimezoneCard.jsx';
@@ -12,11 +13,20 @@ import {
   AlertCircle,
   HelpCircle,
   RefreshCw,
+  ArrowLeft,
+  Send,
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
 export default function AvailabilityPicker() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const requestId = searchParams.get('requestId');
+  const zone = user?.timezone || 'UTC';
+
+  const [request, setRequest] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [windows, setWindows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,8 +43,13 @@ export default function AvailabilityPicker() {
   const [kind, setKind] = useState('AVAILABLE');
 
   useEffect(() => {
+    if (!requestId) return;
     loadAvailability();
-  }, []);
+    api
+      .get(`/interview-requests/${requestId}`)
+      .then(setRequest)
+      .catch(() => setError('That interview request could not be loaded.'));
+  }, [requestId]);
 
   async function loadAvailability() {
     setLoading(true);
@@ -45,6 +60,44 @@ export default function AvailabilityPicker() {
       console.error('Failed to load availability:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Offer the declared windows to the recruiter for this round.
+   *
+   * Only windows that fall inside the round's own date range are sent - a
+   * window next month is real availability but is not an answer to this
+   * request, and the solver would discard it anyway.
+   */
+  async function submitForRequest() {
+    if (!request) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const from = DateTime.fromISO(request.earliestUtc);
+      const to = DateTime.fromISO(request.latestUtc);
+      const slots = windows
+        .filter((w) => w.kind !== 'UNAVAILABLE')
+        .filter((w) => DateTime.fromISO(w.startUtc) >= from && DateTime.fromISO(w.endUtc) <= to)
+        .map((w) => ({ startUtc: w.startUtc, endUtc: w.endUtc }));
+
+      if (!slots.length) {
+        setError(
+          `Add at least one window between ${from.setZone(zone).toFormat('LLL dd')} and ${to
+            .setZone(zone)
+            .toFormat('LLL dd')} - that is the range this round has to happen in.`
+        );
+        return;
+      }
+
+      await api.post(`/interview-requests/${requestId}/candidate-slots`, { slots });
+      setSuccess(`${slots.length} time slot(s) sent to your recruiter.`);
+      setTimeout(() => navigate('/candidate'), 1200);
+    } catch (err) {
+      setError(err.message || 'Could not send your time slots');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -113,18 +166,73 @@ export default function AvailabilityPicker() {
     }
   }
 
+  // Availability is only ever declared in answer to a round. Reaching this page
+  // without one means there is nothing to answer, so send them back.
+  if (!requestId) return <Navigate to="/candidate" replace />;
+
+  const windowLabel = request
+    ? `${DateTime.fromISO(request.earliestUtc, { zone }).toFormat('ccc, LLL dd')} - ${DateTime.fromISO(
+        request.latestUtc,
+        { zone }
+      ).toFormat('ccc, LLL dd, yyyy')}`
+    : null;
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Header */}
       <div className="mb-6">
+        <button
+          onClick={() => navigate('/candidate')}
+          className="text-xs font-semibold text-slate-500 hover:text-brand-700 flex items-center gap-1.5 mb-3"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to my interviews
+        </button>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
           <Clock className="h-6 w-6 text-brand-600" />
-          My Interview Availability
+          Provide Your Available Times
         </h1>
         <p className="text-xs text-slate-600 mt-1">
-          Minimum Deliverable 3 • Provide your available hours using interactive picker or natural English
+          Add the times that suit you, then send them to your recruiter.
         </p>
       </div>
+
+      {/* What this is answering */}
+      {request && (
+        <div className="card p-5 bg-white border border-sky-100 shadow-sm mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="font-extrabold text-sm text-slate-900">{request.roundName}</span>
+                <span className="chip chip-blue">{request.interviewType}</span>
+                <span className="chip border-slate-200 bg-slate-100 text-slate-700">
+                  {request.durationMinutes} min
+                </span>
+                {request.status === 'PROPOSED' && (
+                  <span className="chip chip-green">Slots already sent</span>
+                )}
+              </div>
+              <div className="text-xs text-slate-600 font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-brand-600 shrink-0" />
+                <span>
+                  Must happen between <strong className="text-slate-900">{windowLabel}</strong>
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={submitForRequest}
+              disabled={submitting}
+              className="btn-primary text-xs py-2.5 px-4 shadow-sm flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              {submitting ? 'Sending...' : 'Send These Times to Recruiter'}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-3">
+            Only windows inside the date range above are sent. Blackout windows are never sent.
+          </p>
+        </div>
+      )}
 
       {success && (
         <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-fade-in">
