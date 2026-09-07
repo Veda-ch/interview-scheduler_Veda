@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Award,
   BarChart3,
+  X,
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
@@ -141,23 +142,25 @@ export default function InterviewerAssignments() {
       : interviews;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 animate-fade-in">
       {/* Top Banner */}
-      <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-6">
+      <div className="card p-5 bg-white border border-gray-200 shadow-2xs mb-6 rounded-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
+            <div className="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
               {user?.name?.charAt(0) || 'A'}
             </div>
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded-full border border-purple-200">
-                Interviewer Panel Hub
-              </span>
-              <h1 className="text-2xl font-extrabold text-slate-900 mt-1">
-                Panel Assignments: {user?.name || 'Ananya Sharma'}
-              </h1>
-              <p className="text-xs text-slate-500">
-                Timezone: {user?.timezone || 'UTC'}
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-gray-900">
+                  Panel Assignments
+                </h1>
+                <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                  {user?.name || 'Interviewer'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Timezone: {user?.timezone || 'UTC'} • Track upcoming rounds and submit structured interview evaluations.
               </p>
             </div>
           </div>
@@ -165,15 +168,15 @@ export default function InterviewerAssignments() {
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <a
               href="/calendar"
-              className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 font-bold"
+              className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-2xs flex items-center gap-1.5 transition"
             >
-              <Calendar className="h-4 w-4 text-purple-600" /> View Calendar
+              <Calendar className="h-3.5 w-3.5 text-indigo-600" /> View Calendar
             </a>
             <button
               onClick={loadAssignments}
-              className="btn-ghost text-xs py-2 px-3 text-slate-600 flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-md border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-2xs flex items-center gap-1.5 transition"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+              <RefreshCw className={`h-3.5 w-3.5 text-gray-500 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
           </div>
         </div>
@@ -191,9 +194,9 @@ export default function InterviewerAssignments() {
         <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-purple-50 via-indigo-50/50 to-white border border-purple-200 text-xs text-purple-900 shadow-md animate-fade-in relative">
           <button
             onClick={() => setLatestAiFeedback(null)}
-            className="absolute top-3.5 right-3.5 text-purple-400 hover:text-purple-700 text-xs font-bold p-1 rounded-lg hover:bg-purple-100/60 transition"
+            className="absolute top-3.5 right-3.5 text-purple-400 hover:text-purple-700 p-1 rounded-md hover:bg-purple-100/60 transition"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-2 font-extrabold mb-2 text-purple-950 text-sm">
             <Sparkles className="h-4 w-4 text-purple-600" />

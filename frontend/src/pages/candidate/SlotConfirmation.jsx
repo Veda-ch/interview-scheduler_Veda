@@ -149,13 +149,19 @@ export default function SlotConfirmation() {
               >
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <span
-                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                    className={`text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
                       isRank1
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 text-slate-700'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700'
                     }`}
                   >
-                    {isRank1 ? '★ Recommended Slot' : `Option #${prop.rank || idx + 1}`}
+                    {isRank1 ? (
+                      <>
+                        <Sparkles className="h-3 w-3" /> Recommended Slot
+                      </>
+                    ) : (
+                      `Option #${prop.rank || idx + 1}`
+                    )}
                   </span>
                   <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                     Match {Math.round(prop.score || 90)}%

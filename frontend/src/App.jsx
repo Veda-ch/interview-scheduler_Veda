@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Navbar from './components/Navbar.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import Header from './components/Header.jsx';
+import RequestModal from './pages/recruiter/RequestModal.jsx';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import AuthCallback from './pages/auth/AuthCallback.jsx';
 
@@ -22,18 +24,18 @@ import InterviewerAssignments from './pages/interviewer/InterviewerAssignments.j
 import InterviewerProfile from './pages/interviewer/InterviewerProfile.jsx';
 import VirtualRoom from './pages/meeting/VirtualRoom.jsx';
 import { useAuth } from './context/AuthContext.jsx';
-import { ShieldCheck, Cpu } from 'lucide-react';
 
 export default function App() {
   const { loading, user } = useAuth();
   const location = useLocation();
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-transparent">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="h-10 w-10 rounded-full border-4 border-purple-700 border-t-transparent animate-spin mx-auto mb-3" />
-          <p className="text-xs font-bold text-purple-900">Loading Slotify...</p>
+          <div className="h-8 w-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin mx-auto mb-3" />
+          <p className="text-xs font-semibold text-gray-600">Loading TalentFlow...</p>
         </div>
       </div>
     );
@@ -49,194 +51,183 @@ export default function App() {
     return '/';
   }
 
-  return (
-    <div className="min-h-screen flex flex-col selection:bg-purple-600 selection:text-white bg-transparent">
-      {/* Hide Navbar on full-screen meeting room or dedicated Auth pages */}
-      {!isMeetingRoom && !isAuthPage && <Navbar />}
-
-      <main className="flex-1">
+  // Full-screen unauthenticated or dedicated routes (meeting room, login)
+  if (!user || isAuthPage || isMeetingRoom) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-900 selection:bg-indigo-600 selection:text-white">
         <Routes>
-          {/* Public Auth Routes */}
           <Route
             path="/login"
             element={user ? <Navigate to={getRoleHome(user.role)} replace /> : <LoginPage />}
           />
           <Route path="/auth/callback" element={<AuthCallback />} />
-
-          {/* Protected Routes (require authenticated user) */}
-          {user ? (
-            <>
-              {/* Recruiter Routes */}
-              <Route
-                path="/"
-                element={
-                  user.role === 'RECRUITER' ? (
-                    <PipelineDashboard />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/builder"
-                element={
-                  user.role === 'RECRUITER' ? (
-                    <ScheduleBuilder />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              {/* Read-only calendar. Both endpoints it reads are scoped to the
-                  caller server-side, so every role sees only their own events. */}
-              <Route path="/calendar" element={<CalendarView />} />
-              <Route
-                path="/control-tower"
-                element={
-                  user.role === 'RECRUITER' ? (
-                    <ControlTower />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/analytics"
-                element={
-                  user.role === 'RECRUITER' ? (
-                    <AnalyticsView />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/evaluations"
-                element={
-                  user.role === 'RECRUITER' || user.role === 'ADMIN' ? (
-                    <EvaluationsView />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/jobs"
-                element={
-                  user.role === 'RECRUITER' || user.role === 'ADMIN' ? (
-                    <JobsPage />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-
-              {/* Candidate Routes */}
-              <Route
-                path="/candidate"
-                element={
-                  user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
-                    <CandidatePortal />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/candidate/availability"
-                element={
-                  user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
-                    <AvailabilityPicker />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/candidate/choose-slot"
-                element={
-                  user.role === 'CANDIDATE' ? <ChooseSlot /> : <Navigate to={getRoleHome(user.role)} replace />
-                }
-              />
-              <Route
-                path="/candidate/slots"
-                element={
-                  user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
-                    <SlotConfirmation />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/candidate/profile"
-                element={
-                  user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
-                    <CandidateProfile />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-
-              {/* Interviewer Routes */}
-              <Route
-                path="/interviewer"
-                element={
-                  user.role === 'INTERVIEWER' || user.role === 'RECRUITER' ? (
-                    <InterviewerAssignments />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-              <Route
-                path="/interviewer/profile"
-                element={
-                  user.role === 'INTERVIEWER' ? (
-                    <InterviewerProfile />
-                  ) : (
-                    <Navigate to={getRoleHome(user.role)} replace />
-                  )
-                }
-              />
-
-              {/* Virtual Room Embed */}
-              <Route path="/meeting/:id" element={<VirtualRoom />} />
-
-              {/* Default catch-all for logged-in users */}
-              <Route path="*" element={<Navigate to={getRoleHome(user.role)} replace />} />
-            </>
-          ) : (
-            /* Unauthenticated fallback: send to /login */
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          )}
+          <Route path="/meeting/:id" element={<VirtualRoom />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </main>
+      </div>
+    );
+  }
 
-      {/* Footer */}
-      {!isMeetingRoom && !isAuthPage && (
-        <footer className="mt-auto border-t border-purple-200/80 bg-white/80 backdrop-blur-md py-4 text-xs text-purple-900/70">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-purple-600 shadow-xs shadow-purple-600/50" />
-              <span className="font-bold text-purple-900">Slotify Platform</span>
-              <span>•</span>
-              <span className="flex items-center gap-1 font-medium">
-                <Cpu className="h-3 w-3 text-purple-700" /> Smart Scheduling Engine Active
-              </span>
-            </div>
-            <div className="flex items-center gap-3 font-medium text-purple-800/80">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5 text-purple-700" />
-                Conflict-Free Scheduling Guard
-              </span>
-              <span>•</span>
-              <span className="font-semibold text-purple-800">Purple & White Theme</span>
-            </div>
-          </div>
-        </footer>
-      )}
+  // Authenticated Enterprise SaaS Layout Shell: Fixed Sidebar + Top Header + Responsive Workspace
+  return (
+    <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-900 selection:bg-indigo-600 selection:text-white">
+      {/* Left Navigation Sidebar */}
+      <Sidebar onOpenScheduleModal={() => setScheduleModalOpen(true)} />
+
+      {/* Main Workspace Area */}
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <Header onOpenScheduleModal={() => setScheduleModalOpen(true)} />
+
+        {/* Dynamic Page Content */}
+        <main className="flex-1 overflow-y-auto bg-gray-50">
+          <Routes>
+            {/* Recruiter Routes */}
+            <Route
+              path="/"
+              element={
+                user.role === 'RECRUITER' ? (
+                  <PipelineDashboard />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/builder"
+              element={
+                user.role === 'RECRUITER' ? (
+                  <ScheduleBuilder />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            {/* Master Scheduler & Calendar (Exact 3-Column Layout from design) */}
+            <Route path="/calendar" element={<CalendarView onOpenScheduleModal={() => setScheduleModalOpen(true)} />} />
+            <Route
+              path="/control-tower"
+              element={
+                user.role === 'RECRUITER' ? (
+                  <ControlTower />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                user.role === 'RECRUITER' ? (
+                  <AnalyticsView />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/evaluations"
+              element={
+                user.role === 'RECRUITER' || user.role === 'ADMIN' ? (
+                  <EvaluationsView />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/jobs"
+              element={
+                user.role === 'RECRUITER' || user.role === 'ADMIN' ? (
+                  <JobsPage />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+
+            {/* Candidate Routes */}
+            <Route
+              path="/candidate"
+              element={
+                user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
+                  <CandidatePortal />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/candidate/availability"
+              element={
+                user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
+                  <AvailabilityPicker />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/candidate/choose-slot"
+              element={
+                user.role === 'CANDIDATE' ? <ChooseSlot /> : <Navigate to={getRoleHome(user.role)} replace />
+              }
+            />
+            <Route
+              path="/candidate/slots"
+              element={
+                user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
+                  <SlotConfirmation />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/candidate/profile"
+              element={
+                user.role === 'CANDIDATE' || user.role === 'RECRUITER' ? (
+                  <CandidateProfile />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+
+            {/* Interviewer Routes */}
+            <Route
+              path="/interviewer"
+              element={
+                user.role === 'INTERVIEWER' || user.role === 'RECRUITER' ? (
+                  <InterviewerAssignments />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+            <Route
+              path="/interviewer/profile"
+              element={
+                user.role === 'INTERVIEWER' ? (
+                  <InterviewerProfile />
+                ) : (
+                  <Navigate to={getRoleHome(user.role)} replace />
+                )
+              }
+            />
+
+            {/* Default catch-all for logged-in users */}
+            <Route path="*" element={<Navigate to={getRoleHome(user.role)} replace />} />
+          </Routes>
+        </main>
+      </div>
+
+      {/* Global Schedule Interview Modal */}
+      <RequestModal
+        isOpen={scheduleModalOpen}
+        onClose={() => setScheduleModalOpen(false)}
+        onSuccess={() => setScheduleModalOpen(false)}
+      />
     </div>
   );
 }
