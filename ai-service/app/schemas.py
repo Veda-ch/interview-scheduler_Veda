@@ -156,6 +156,27 @@ class SkillMatchRequest(BaseModel):
     offered: list[dict[str, Any]] = Field(default_factory=list, max_length=120)
 
 
+def _as_rounded_int(v: Any) -> Any:
+    """Accept 83.6 (or "84") where the contract says an integer.
+
+    Models answer with fractions all the time. Rejecting a correct judgement
+    over its notation throws the whole answer away and silently drops us onto
+    the deterministic fallback - the validator is the bug in that case, not the
+    model. Anything genuinely non-numeric is passed through untouched so the
+    normal validation error still fires.
+    """
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, float):
+        return int(round(v))
+    if isinstance(v, str):
+        try:
+            return int(round(float(v.strip())))
+        except (TypeError, ValueError):
+            return v
+    return v
+
+
 class SkillCoverage(BaseModel):
     """The model's judgement on one required skill."""
 
@@ -163,6 +184,11 @@ class SkillCoverage(BaseModel):
     covered_by: str = ""
     coverage: int = Field(default=0, ge=0, le=100)
     reason: str = ""
+
+    @field_validator("coverage", mode="before")
+    @classmethod
+    def round_coverage(cls, v: Any) -> Any:
+        return _as_rounded_int(v)
 
 
 class SkillMatchAnalysis(BaseModel):
@@ -172,6 +198,11 @@ class SkillMatchAnalysis(BaseModel):
     per_skill: list[SkillCoverage] = Field(default_factory=list, max_length=60)
     unmet_must_haves: list[str] = Field(default_factory=list, max_length=30)
     summary: str = ""
+
+    @field_validator("overall", mode="before")
+    @classmethod
+    def round_overall(cls, v: Any) -> Any:
+        return _as_rounded_int(v)
 
 
 # --------------------------------------------------------------------------- #

@@ -4,6 +4,7 @@ import prisma from '../lib/prisma.js';
 import { requireAuth, requireRole, authorizeInterview, loadOwnProfile } from '../middleware/auth.js';
 import { validateBody, validateQuery } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { candidateCancel, candidateReschedule } from '../services/autoSchedule.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import {
   candidateRespond,
@@ -211,6 +212,49 @@ router.post(
         interviewerId: own.id,
         response: PANEL_RESPONSE.DECLINED,
         reason: req.body.reason,
+        actor: req.user,
+      })
+    );
+  })
+);
+
+/**
+ * The candidate calls the whole round off. Unlike a reschedule this is
+ * terminal: the interview is cancelled and the round closes with it.
+ */
+router.post(
+  '/:id/candidate-cancel',
+  idempotency(),
+  validateBody(z.object({ reason: z.string().trim().min(3).max(500) })),
+  asyncHandler(async (req, res) => {
+    await authorizeInterview(req, req.params.id, { action: 'respond' });
+    if (req.user.role !== ROLES.CANDIDATE) {
+      throw forbidden('Only the candidate can cancel their own round this way');
+    }
+    res.json(await candidateCancel({ interviewId: req.params.id, reason: req.body.reason, actor: req.user }));
+  })
+);
+
+/** Candidate moves a booked interview to another of the interviewer's free times. */
+router.post(
+  '/:id/candidate-reschedule',
+  idempotency(),
+  validateBody(
+    z.object({
+      startUtc: z.string().datetime({ offset: true }),
+      endUtc: z.string().datetime({ offset: true }),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    await authorizeInterview(req, req.params.id, { action: 'respond' });
+    if (req.user.role !== ROLES.CANDIDATE) {
+      throw forbidden('Only the candidate can move their own interview this way');
+    }
+    res.json(
+      await candidateReschedule({
+        interviewId: req.params.id,
+        startUtc: req.body.startUtc,
+        endUtc: req.body.endUtc,
         actor: req.user,
       })
     );

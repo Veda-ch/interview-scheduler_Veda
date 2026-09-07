@@ -15,6 +15,7 @@ import EvaluationsView from './pages/recruiter/EvaluationsView.jsx';
 import CandidatePortal from './pages/candidate/CandidatePortal.jsx';
 import AvailabilityPicker from './pages/candidate/AvailabilityPicker.jsx';
 import SlotConfirmation from './pages/candidate/SlotConfirmation.jsx';
+import ChooseSlot from './pages/candidate/ChooseSlot.jsx';
 import CandidateProfile from './pages/candidate/CandidateProfile.jsx';
 
 import InterviewerAssignments from './pages/interviewer/InterviewerAssignments.jsx';
@@ -149,6 +150,12 @@ export default function App() {
                   ) : (
                     <Navigate to={getRoleHome(user.role)} replace />
                   )
+                }
+              />
+              <Route
+                path="/candidate/choose-slot"
+                element={
+                  user.role === 'CANDIDATE' ? <ChooseSlot /> : <Navigate to={getRoleHome(user.role)} replace />
                 }
               />
               <Route

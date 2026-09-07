@@ -12,6 +12,9 @@ import {
   Briefcase,
   User,
   Sliders,
+  CalendarClock,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
@@ -22,6 +25,10 @@ export default function CandidatePortal() {
   const [interviews, setInterviews] = useState([]);
   const [proposals, setProposals] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [cancelling, setCancelling] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,6 +50,23 @@ export default function CandidatePortal() {
       console.error('Failed to load candidate portal:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function confirmCancel(e) {
+    e.preventDefault();
+    if (!cancelling || cancelReason.trim().length < 3) return;
+    setCancelBusy(true);
+    setCancelError(null);
+    try {
+      await api.postOnce(`/interviews/${cancelling.id}/candidate-cancel`, { reason: cancelReason.trim() });
+      setCancelling(null);
+      setCancelReason('');
+      await loadData();
+    } catch (err) {
+      setCancelError(err.message || 'Could not cancel the interview');
+    } finally {
+      setCancelBusy(false);
     }
   }
 
@@ -100,43 +124,74 @@ export default function CandidatePortal() {
             {requests.map((req) => {
               const earliest = DateTime.fromISO(req.earliestUtc, { zone: user?.timezone || 'UTC' });
               const latest = DateTime.fromISO(req.latestUtc, { zone: user?.timezone || 'UTC' });
-              const isSubmitted = req.status === 'PROPOSED' || req.focusTopics?.length > 0;
+              // One card, four states. The action changes with the state; the
+              // chip explains where the round actually is.
+              const STATES = {
+                PENDING: { chip: 'chip-amber', label: 'Awaiting your time slots' },
+                PROPOSED: { chip: 'chip-blue', label: 'Matching your times' },
+                WAITING: { chip: 'chip-amber', label: 'Waiting on the interviewer' },
+                SLOTS_OFFERED: { chip: 'chip-purple', label: 'Choose from available times' },
+                SCHEDULED: { chip: 'chip-green', label: 'Scheduled' },
+                CANCELLED: { chip: 'chip-red', label: 'Cancelled' },
+                FAILED: { chip: 'chip-red', label: 'Could not be scheduled' },
+              };
+              const state = STATES[req.status] || { chip: 'chip-blue', label: req.status };
 
               return (
                 <div
                   key={req.id}
                   className="p-4 rounded-xl bg-sky-50/50 border border-sky-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-extrabold text-sm text-slate-900">{req.roundName}</span>
                       <span className="chip chip-blue">{req.interviewType}</span>
-                      {isSubmitted ? (
-                        <span className="chip chip-green">Slots Submitted to Recruiter</span>
-                      ) : (
-                        <span className="chip chip-amber">Awaiting Your Time Slots</span>
-                      )}
+                      <span className={`chip ${state.chip}`}>{state.label}</span>
                     </div>
 
                     <div className="text-xs text-slate-600 font-medium flex items-center gap-2 mt-2">
-                      <Clock className="h-4 w-4 text-brand-600 shrink-0" />
+                      <Clock className="h-4 w-4 text-purple-600 shrink-0" />
                       <span>
-                        Designated Date Window:{' '}
+                        Interview window:{' '}
                         <strong className="text-slate-900">{earliest.toFormat('ccc, LLL dd')}</strong> –{' '}
                         <strong className="text-slate-900">{latest.toFormat('ccc, LLL dd, yyyy')}</strong>
                       </span>
                     </div>
+
+                    {req.status === 'WAITING' && (
+                      <p className="text-[11px] text-amber-700 font-medium mt-1.5">
+                        Your times are with an interviewer for confirmation. We will let you know as
+                        soon as they respond.
+                      </p>
+                    )}
+                    {req.status === 'FAILED' && req.failureReason && (
+                      <p className="text-[11px] text-rose-700 font-medium mt-1.5">{req.failureReason}</p>
+                    )}
                   </div>
 
-                  <button
-                    onClick={() => navigate(`/candidate/availability?requestId=${req.id}`)}
-                    className={`btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5 shrink-0 ${
-                      isSubmitted ? 'bg-slate-700 hover:bg-slate-800' : ''
-                    }`}
-                  >
-                    <Calendar className="h-4 w-4" />
-                    {isSubmitted ? 'Update Time Slots' : 'Provide Available Time Slots'}
-                  </button>
+                  {req.status === 'PENDING' && (
+                    <button
+                      onClick={() => navigate(`/candidate/availability?requestId=${req.id}`)}
+                      className="btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5 shrink-0 font-bold"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      Provide Available Time Slots
+                    </button>
+                  )}
+
+                  {req.status === 'SLOTS_OFFERED' && (
+                    <button
+                      onClick={() => navigate(`/candidate/choose-slot?requestId=${req.id}`)}
+                      className="btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5 shrink-0 font-bold"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Choose an Available Time
+                    </button>
+                  )}
+
+                  {req.status === 'WAITING' && (
+                    <span className="chip chip-amber shrink-0 font-bold">Held for you</span>
+                  )}
                 </div>
               );
             })}
@@ -217,13 +272,22 @@ export default function CandidatePortal() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-400">Need to adjust your time?</span>
+                <div className="flex items-center justify-between gap-3 text-xs pt-1">
                   <button
-                    onClick={() => navigate('/candidate/slots')}
-                    className="text-brand-600 font-bold hover:underline"
+                    onClick={() =>
+                      navigate(
+                        `/candidate/choose-slot?requestId=${upcomingInterview.requestId}&mode=reschedule&interviewId=${upcomingInterview.id}`
+                      )
+                    }
+                    className="btn-secondary text-xs py-2 px-3.5 flex items-center gap-1.5 font-bold"
                   >
-                    Reschedule Request
+                    <CalendarClock className="h-3.5 w-3.5 text-purple-600" /> Reschedule
+                  </button>
+                  <button
+                    onClick={() => setCancelling(upcomingInterview)}
+                    className="text-rose-600 font-bold hover:underline flex items-center gap-1.5"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Cancel interview
                   </button>
                 </div>
               </div>
@@ -258,6 +322,66 @@ export default function CandidatePortal() {
         </div>
       </div>
 
+
+      {/* Cancelling ends the whole round, so it asks for a reason first. */}
+      {cancelling && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md card p-6 bg-white border border-sky-100 shadow-2xl animate-fade-in">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="p-2.5 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Cancel this interview?</h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  This cancels the whole round, not just this time. Your recruiter and interviewer
+                  will both be told. To keep the round and just move it, use Reschedule instead.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 mb-3">
+              <strong className="block text-slate-900">{cancelling.round?.name || 'Interview'}</strong>
+              {cancelling.localLabel}
+            </div>
+
+            {cancelError && (
+              <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800">
+                {cancelError}
+              </div>
+            )}
+
+            <form onSubmit={confirmCancel}>
+              <label className="label text-[10px]">Reason</label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                required
+                minLength={3}
+                placeholder="Let them know why, so the recruiter can follow up."
+                className="input text-xs resize-none"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => { setCancelling(null); setCancelError(null); }}
+                  className="btn-secondary text-xs py-2 px-4"
+                >
+                  Keep interview
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancelBusy || cancelReason.trim().length < 3}
+                  className="btn-danger text-xs py-2 px-4 font-bold"
+                >
+                  {cancelBusy ? 'Cancelling...' : 'Cancel interview'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

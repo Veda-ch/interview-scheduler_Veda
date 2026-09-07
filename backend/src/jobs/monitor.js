@@ -12,6 +12,7 @@ import logger from '../lib/logger.js';
 import config from '../config/env.js';
 import { raiseIncident } from '../services/controlTower.service.js';
 import { getSettings } from '../services/settings.service.js';
+import { expireStaleOffers } from '../services/autoSchedule.service.js';
 import { notify, interviewContext } from '../services/notification.service.js';
 import { computeWorkloadBulk } from '../services/interviewer.service.js';
 import { fullInterviewInclude } from '../services/interview.shape.js';
@@ -243,6 +244,15 @@ async function expireProposals(now) {
   if (count) logger.debug(`Expired ${count} stale slot proposal(s)`);
 }
 
+/**
+ * Offers nobody answered inside their window. Expiring one passes the round to
+ * the next-ranked interviewer, or back to the candidate if we have run out.
+ */
+async function sweepSlotOffers() {
+  const { expired, escalated } = await expireStaleOffers();
+  if (expired) logger.info(`Expired ${expired} slot offer(s); escalated ${escalated}`);
+}
+
 const DETECTORS = [
   ['overruns', detectOverruns],
   ['no-shows', detectNoShows],
@@ -250,6 +260,7 @@ const DETECTORS = [
   ['integrations', detectIntegrationFailures],
   ['overload', detectOverload],
   ['reminders', sendReminders],
+  ['slot-offers', sweepSlotOffers],
   ['housekeeping', expireProposals],
 ];
 

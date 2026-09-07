@@ -5,6 +5,7 @@ import {
   Plus,
   Trash2,
   Calendar,
+  CalendarRange,
   Clock,
   Briefcase,
   User,
@@ -25,6 +26,7 @@ const INTERVIEW_TYPES = [
 
 export default function RequestModal({ isOpen, onClose, onSuccess, initialApplicationId = null }) {
   const [applications, setApplications] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -37,12 +39,6 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
   const [requiredInterviewerCount, setRequiredInterviewerCount] = useState(1);
   const [bufferMinutes, setBufferMinutes] = useState(15);
   const [priority, setPriority] = useState('NORMAL');
-  const [earliestDate, setEarliestDate] = useState(
-    DateTime.now().plus({ days: 1 }).toISODate()
-  );
-  const [latestDate, setLatestDate] = useState(
-    DateTime.now().plus({ days: 8 }).toISODate()
-  );
 
   // Skills
   const [skills, setSkills] = useState([
@@ -62,7 +58,11 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
   async function loadApplications() {
     setLoading(true);
     try {
-      const res = await api.get('/candidates?take=50');
+      const [res, jobList] = await Promise.all([
+        api.get('/candidates?take=50'),
+        api.get('/jobs').catch(() => []),
+      ]);
+      setJobs(jobList || []);
       const candidateList = res?.items || res || [];
       const apps = [];
       for (const c of candidateList) {
@@ -74,6 +74,7 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
               candidateNumber: num,
               candidateName: c.name,
               candidateId: c.id,
+              jobId: app.jobId,
               jobTitle: app.jobTitle || app.job?.title || c.headline || 'Engineer',
               skills: c.skills?.map((s) => s.name || s.skill?.name) || [],
             });
@@ -98,6 +99,15 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
       setLoading(false);
     }
   }
+
+  const selectedApp = applications.find((a) => a.id === applicationId);
+  const selectedJob = jobs.find((j) => j.id === selectedApp?.jobId);
+  const jobWindow =
+    selectedJob?.interviewWindowStart && selectedJob?.interviewWindowEnd
+      ? `${DateTime.fromISO(selectedJob.interviewWindowStart).toFormat('LLL dd')} – ${DateTime.fromISO(
+          selectedJob.interviewWindowEnd
+        ).toFormat('LLL dd, yyyy')}`
+      : null;
 
   function handleApplicationChange(appId) {
     setApplicationId(appId);
@@ -135,8 +145,6 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
     setSubmitting(true);
     setError(null);
 
-    const earliestUtc = DateTime.fromISO(earliestDate).startOf('day').toISO();
-    const latestUtc = DateTime.fromISO(latestDate).endOf('day').toISO();
 
     try {
       const payload = {
@@ -147,8 +155,6 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
         durationMinutes: Number(durationMinutes),
         requiredInterviewerCount: Number(requiredInterviewerCount),
         bufferMinutes: Number(bufferMinutes),
-        earliestUtc,
-        latestUtc,
         priority,
         requiredSkills: skills,
       };
@@ -300,27 +306,20 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
             </div>
           </div>
 
-          {/* Date Range Window */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Earliest Interview Date *</label>
-              <input
-                type="date"
-                value={earliestDate}
-                onChange={(e) => setEarliestDate(e.target.value)}
-                className="input cursor-pointer font-medium"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Latest Interview Date *</label>
-              <input
-                type="date"
-                value={latestDate}
-                onChange={(e) => setLatestDate(e.target.value)}
-                className="input cursor-pointer font-medium"
-                required
-              />
+          {/* The window is the job's, not the recruiter's, so it is shown not asked */}
+          <div className="p-3.5 rounded-xl bg-sky-50/60 border border-sky-100 flex items-start gap-2.5">
+            <CalendarRange className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-slate-800 block">Interview window</span>
+              {jobWindow ? (
+                <span className="text-[11px] text-slate-600 font-medium">
+                  {jobWindow} &middot; inherited from the job, editable on Jobs &amp; Skills
+                </span>
+              ) : (
+                <span className="text-[11px] text-amber-700 font-semibold">
+                  This job has no interview window yet. Set one on Jobs &amp; Skills first.
+                </span>
+              )}
             </div>
           </div>
 

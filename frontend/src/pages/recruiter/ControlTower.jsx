@@ -29,7 +29,10 @@ export default function ControlTower() {
   async function loadIncidents() {
     setLoading(true);
     try {
-      const data = await api.get('/control-tower/incidents');
+      // Include resolved ones: the page's whole point is showing what the system
+      // did on its own, and an incident it recovered without asking is exactly
+      // that. Open incidents still sort first.
+      const data = await api.get('/control-tower/incidents?includeResolved=true');
       setIncidents(data || []);
     } catch (err) {
       console.error('Failed to load incidents:', err);

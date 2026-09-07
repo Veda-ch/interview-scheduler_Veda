@@ -22,6 +22,8 @@ export function shapeJob(row) {
     experienceMin: row.experienceMin,
     experienceMax: row.experienceMax,
     requiredSkills: parseArray(row.requiredSkillsJson),
+    interviewWindowStart: row.interviewWindowStart,
+    interviewWindowEnd: row.interviewWindowEnd,
     status: row.status,
     recruiter: row.recruiter ? { id: row.recruiter.id, name: row.recruiter.user?.name } : null,
     applicationCount: row._count?.applications ?? undefined,
@@ -38,6 +40,12 @@ export function shapeJob(row) {
  * skills the recruiter never asked for. Those skills are what interviewers are
  * matched against, so they stay exactly as entered.
  */
+const toWindowDates = (data) => ({
+  ...data,
+  ...(data.interviewWindowStart ? { interviewWindowStart: new Date(data.interviewWindowStart) } : {}),
+  ...(data.interviewWindowEnd ? { interviewWindowEnd: new Date(data.interviewWindowEnd) } : {}),
+});
+
 export async function createJob({ recruiterId, requiredSkills, ...data }) {
   const skills = requiredSkills || [];
 
@@ -46,7 +54,7 @@ export async function createJob({ recruiterId, requiredSkills, ...data }) {
 
   const job = await prisma.job.create({
     data: {
-      ...data,
+      ...toWindowDates(data),
       recruiterId,
       requiredSkillsJson: stringifyJson(skills),
     },
@@ -61,7 +69,7 @@ export async function updateJob(id, data) {
   if (requiredSkills) await upsertSkillsByName(prisma, requiredSkills.map((s) => s.name));
   const row = await prisma.job.update({
     where: { id },
-    data: { ...rest, ...(requiredSkills ? { requiredSkillsJson: stringifyJson(requiredSkills) } : {}) },
+    data: { ...toWindowDates(rest), ...(requiredSkills ? { requiredSkillsJson: stringifyJson(requiredSkills) } : {}) },
     include: jobInclude,
   });
   return shapeJob(row);

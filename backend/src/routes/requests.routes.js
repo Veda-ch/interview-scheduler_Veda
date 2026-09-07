@@ -17,6 +17,8 @@ import {
   DEFAULT_ROUND_PLAN,
 } from '../../../shared/constants.js';
 import { getSettings } from '../services/settings.service.js';
+import logger from '../lib/logger.js';
+import { runAutoSchedule, offeredSlotsFor, bookOfferedSlot } from '../services/autoSchedule.service.js';
 import { SETTING_KEYS } from '../../../shared/constants.js';
 
 const router = Router();
@@ -30,8 +32,10 @@ const requestSchema = z.object({
   durationMinutes: z.coerce.number().int().min(15).max(480),
   requiredInterviewerCount: z.coerce.number().int().min(1).max(5).default(1),
   bufferMinutes: z.coerce.number().int().min(0).max(120).optional(),
-  earliestUtc: z.string().datetime({ offset: true }),
-  latestUtc: z.string().datetime({ offset: true }),
+  // Optional: the interview window belongs to the job. These are only accepted
+  // as an override, and are normally omitted entirely.
+  earliestUtc: z.string().datetime({ offset: true }).optional(),
+  latestUtc: z.string().datetime({ offset: true }).optional(),
   requiredSkills: z
     .array(
       z.object({
@@ -163,8 +167,15 @@ router.post(
       throw conflict(`Cannot schedule for a ${application.status.toLowerCase()} application`, 'APPLICATION_INACTIVE');
     }
 
-    const earliest = new Date(body.earliestUtc);
-    const latest = new Date(body.latestUtc);
+    // The window comes from the job the candidate applied to, so every round
+    // for that role runs inside the same agreed dates.
+    const earliest = new Date(body.earliestUtc ?? application.job.interviewWindowStart ?? '');
+    const latest = new Date(body.latestUtc ?? application.job.interviewWindowEnd ?? '');
+    if (Number.isNaN(+earliest) || Number.isNaN(+latest)) {
+      throw badRequest(
+        `"${application.job.title}" has no interview date window yet. Set one on the Jobs & Skills page first.`
+      );
+    }
     if (latest <= earliest) throw badRequest('The latest date must be after the earliest date');
     if (latest < new Date()) throw badRequest('The date range is entirely in the past');
     const rangeMinutes = (latest - earliest) / 60000;
@@ -332,9 +343,27 @@ router.post(
       throw forbidden('Only the candidate or a recruiter can submit slots');
     }
 
+    const jobStart = request.application.job.interviewWindowStart;
+    const jobEnd = request.application.job.interviewWindowEnd;
+
     for (const slot of slots) {
-      if (new Date(slot.endUtc) <= new Date(slot.startUtc)) {
-        throw badRequest('Each slot must end after it starts');
+      const start = new Date(slot.startUtc);
+      const end = new Date(slot.endUtc);
+      if (end <= start) throw badRequest('Each slot must end after it starts');
+
+      // Rounds run in whole hours, so the times offered have to be too.
+      const minutes = (end - start) / 60000;
+      if (minutes % 60 !== 0) {
+        throw badRequest('Each time slot must be a whole number of hours');
+      }
+      // The job states when interviews for the role may happen; a slot outside
+      // it can never be booked, so reject it here rather than silently dropping
+      // it during matching.
+      if (jobStart && start < new Date(jobStart)) {
+        throw badRequest('That time is before the interview window for this job');
+      }
+      if (jobEnd && end > new Date(jobEnd)) {
+        throw badRequest('That time is after the interview window for this job');
       }
     }
 
@@ -364,7 +393,83 @@ router.post(
       include: requestInclude,
     });
 
-    res.json({ ok: true, request: shapeRequest(updated) });
+    // Submitting is the trigger: resolve the round now rather than waiting for
+    // the recruiter to press anything.
+    let outcome = null;
+    try {
+      const result = await runAutoSchedule(req.params.id, { actor: req.user });
+      outcome = result.outcome;
+    } catch (err) {
+      logger.error('Auto-scheduling failed after slot submission', {
+        requestId: req.params.id,
+        error: err.message,
+      });
+      outcome = 'ERROR';
+    }
+
+    const fresh = await prisma.interviewRequest.findUnique({
+      where: { id: req.params.id },
+      include: requestInclude,
+    });
+    res.json({ ok: true, outcome, request: shapeRequest(fresh ?? updated) });
+  })
+);
+
+/**
+ * The times the candidate may pick from when their own could not be used, and
+ * the same list shown when rescheduling. Always one interviewer's declared
+ * availability, so a pick books straight away.
+ */
+router.get(
+  '/:id/offered-slots',
+  asyncHandler(async (req, res) => {
+    const row = await prisma.interviewRequest.findUnique({
+      where: { id: req.params.id },
+      include: requestInclude,
+    });
+    if (!row) throw notFound('Interview request not found');
+    if (req.user.role === ROLES.CANDIDATE) {
+      const own = await loadOwnProfile(req);
+      if (row.application.candidateId !== own?.id) throw forbidden('This request is not yours');
+    }
+    res.json(await offeredSlotsFor(req.params.id));
+  })
+);
+
+/** Candidate takes one of those times. */
+router.post(
+  '/:id/choose-slot',
+  validateBody(
+    z.object({
+      interviewerId: z.string().min(5),
+      startUtc: z.string().datetime({ offset: true }),
+      endUtc: z.string().datetime({ offset: true }),
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const row = await prisma.interviewRequest.findUnique({
+      where: { id: req.params.id },
+      include: requestInclude,
+    });
+    if (!row) throw notFound('Interview request not found');
+    if (req.user.role === ROLES.CANDIDATE) {
+      const own = await loadOwnProfile(req);
+      if (row.application.candidateId !== own?.id) throw forbidden('This request is not yours');
+    } else if (![ROLES.RECRUITER, ROLES.ADMIN].includes(req.user.role)) {
+      throw forbidden('Only the candidate or a recruiter can choose a slot');
+    }
+    if (row.status === REQUEST_STATUS.SCHEDULED) {
+      throw conflict('This round is already scheduled.', 'ALREADY_SCHEDULED');
+    }
+
+    const interview = await bookOfferedSlot({
+      requestId: req.params.id,
+      interviewerId: req.body.interviewerId,
+      startUtc: req.body.startUtc,
+      endUtc: req.body.endUtc,
+      actor: req.user,
+    });
+    res.status(201).json(interview);
   })
 );
 

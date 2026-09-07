@@ -33,6 +33,10 @@ export default function InterviewerAssignments() {
   const [actionSuccess, setActionSuccess] = useState(null);
   const [latestAiFeedback, setLatestAiFeedback] = useState(null);
   const [workload, setWorkload] = useState(null);
+  const [offers, setOffers] = useState([]);
+  const [offerBusy, setOfferBusy] = useState(null);
+  const [declineOfferId, setDeclineOfferId] = useState(null);
+  const [offerDeclineReason, setOfferDeclineReason] = useState('');
   const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
@@ -52,10 +56,41 @@ export default function InterviewerAssignments() {
       ]);
       setInterviews(data || []);
       setWorkload(load);
+      setOffers(isInterviewer ? (await api.get('/offers/mine').catch(() => [])) || [] : []);
     } catch (err) {
       console.error('Failed to load assignments:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function acceptOffer(offerId, slot) {
+    setOfferBusy(offerId);
+    try {
+      await api.postOnce(`/offers/${offerId}/accept`, { startUtc: slot.startUtc, endUtc: slot.endUtc });
+      setActionSuccess(`Booked for ${slot.label}. It is on your calendar now.`);
+      loadAssignments();
+    } catch (err) {
+      alert(err.message || 'Could not accept that time');
+    } finally {
+      setOfferBusy(null);
+    }
+  }
+
+  async function declineOffer(e) {
+    e.preventDefault();
+    if (!declineOfferId || offerDeclineReason.trim().length < 3) return;
+    setOfferBusy(declineOfferId);
+    try {
+      await api.postOnce(`/offers/${declineOfferId}/decline`, { reason: offerDeclineReason.trim() });
+      setActionSuccess('Declined. The request has moved on to another interviewer.');
+      setDeclineOfferId(null);
+      setOfferDeclineReason('');
+      loadAssignments();
+    } catch (err) {
+      alert(err.message || 'Could not decline');
+    } finally {
+      setOfferBusy(null);
     }
   }
 
@@ -335,6 +370,67 @@ export default function InterviewerAssignments() {
         </button>
       </div>
 
+      {/* Offers - times a candidate proposed that you never declared free */}
+      {offers.length > 0 && (
+        <div className="card p-5 bg-amber-50/50 border border-amber-200 shadow-sm mb-6">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-1">
+            <Clock className="h-5 w-5 text-amber-600" />
+            Time Requests Awaiting You ({offers.length})
+          </h2>
+          <p className="text-xs text-slate-600 mb-4">
+            A candidate proposed these times and nobody had declared them free. Pick one to take the
+            interview, or decline and it passes to the next interviewer.
+          </p>
+
+          <div className="space-y-3">
+            {offers.map((o) => (
+              <div key={o.id} className="p-4 rounded-xl bg-white border border-amber-200">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="font-extrabold text-sm text-slate-900">{o.round?.name}</span>
+                  <span className="chip chip-blue">{o.round?.type}</span>
+                  <span className="chip border-slate-200 bg-slate-100 text-slate-700">
+                    {o.round?.durationMinutes} min
+                  </span>
+                  <span className="chip chip-purple">Skill match {Math.round(o.matchScore)}%</span>
+                  <span className="chip chip-amber ml-auto font-bold">
+                    {o.hoursLeft}h to respond
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 font-medium mb-3">
+                  {o.round?.candidateName} &middot; {o.round?.jobTitle}
+                </p>
+
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                  Pick a time that works
+                </span>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {(o.slots || []).map((slot) => (
+                    <button
+                      key={slot.startUtc}
+                      onClick={() => acceptOffer(o.id, slot)}
+                      disabled={Boolean(offerBusy)}
+                      className="px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-800
+                                 hover:bg-emerald-100 hover:border-emerald-400 disabled:opacity-40 transition shadow-xs"
+                    >
+                      {offerBusy === o.id ? 'Booking...' : slot.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setDeclineOfferId(o.id)}
+                  disabled={Boolean(offerBusy)}
+                  className="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1.5"
+                >
+                  <XCircle className="h-3.5 w-3.5" /> None of these work
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Assignments List */}
       <div className="space-y-4">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -575,6 +671,47 @@ export default function InterviewerAssignments() {
           loadAssignments();
         }}
       />
+
+      {/* Declining hands the round to the next-ranked interviewer. */}
+      {declineOfferId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md card p-6 bg-white border border-sky-100 shadow-2xl animate-fade-in">
+            <h3 className="text-base font-bold text-slate-900 mb-1">None of these times work?</h3>
+            <p className="text-xs text-slate-600 mb-4">
+              The request passes to the next best-matched interviewer. If nobody can take it, the
+              candidate is asked to pick from your available times instead.
+            </p>
+            <form onSubmit={declineOffer}>
+              <label className="label text-[10px]">Reason</label>
+              <textarea
+                value={offerDeclineReason}
+                onChange={(e) => setOfferDeclineReason(e.target.value)}
+                rows={3}
+                required
+                minLength={3}
+                placeholder="e.g. travelling that week"
+                className="input text-xs resize-none"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => { setDeclineOfferId(null); setOfferDeclineReason(''); }}
+                  className="btn-secondary text-xs py-2 px-4"
+                >
+                  Go back
+                </button>
+                <button
+                  type="submit"
+                  disabled={Boolean(offerBusy) || offerDeclineReason.trim().length < 3}
+                  className="btn-danger text-xs py-2 px-4 font-bold"
+                >
+                  {offerBusy ? 'Declining...' : 'Decline'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

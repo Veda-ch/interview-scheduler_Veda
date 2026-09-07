@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import RequestModal from './RequestModal.jsx';
 import {
   Layers,
@@ -21,6 +22,7 @@ import {
   Users,
   UserCheck,
   X,
+  RotateCcw,
 } from 'lucide-react';
 import { DateTime } from 'luxon';
 
@@ -35,7 +37,27 @@ export default function PipelineDashboard() {
   const [selectedApplicationId, setSelectedApplicationId] = useState(null);
   const [activeTab, setActiveTab] = useState('requests');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState('');
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  // Rebuilding the demo data deletes and recreates every user, so the current
+  // session's token points at a row that no longer exists. Sign out and send
+  // the user back to login rather than letting the next call 401.
+  async function runDemoReset() {
+    setResetting(true);
+    setResetError('');
+    try {
+      await api.post('/demo/reset', {});
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (err) {
+      setResetError(err?.message || 'Reset failed.');
+      setResetting(false);
+    }
+  }
 
   useEffect(() => {
     loadDashboardData();
@@ -133,6 +155,13 @@ export default function PipelineDashboard() {
               title="Refresh Data"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+            <button
+              onClick={() => setIsResetOpen(true)}
+              className="btn-ghost text-xs py-2 px-3 text-slate-500 hover:text-rose-700"
+              title="Rebuild the demo dataset from scratch"
+            >
+              <RotateCcw className="h-4 w-4" /> Reset Demo
             </button>
             <button
               onClick={() => setIsPullModalOpen(true)}
@@ -611,6 +640,57 @@ export default function PipelineDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isResetOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+              <div className="p-2.5 bg-rose-100 text-rose-700 rounded-2xl">
+                <RotateCcw className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Reset demo data</h2>
+            </div>
+
+            <div className="p-5 space-y-3 text-sm text-slate-600">
+              <p>
+                This deletes <strong className="text-slate-900">everything</strong> — jobs, candidates,
+                requests, interviews, feedback and incidents — and rebuilds the scripted demo dataset
+                from scratch.
+              </p>
+              <p>
+                All accounts are recreated, so you will be signed out and need to log back in with{' '}
+                <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-xs">
+                  Password123
+                </code>
+                .
+              </p>
+              {resetError && (
+                <p className="text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 text-xs font-semibold">
+                  {resetError}
+                </p>
+              )}
+            </div>
+
+            <div className="p-5 pt-0 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setIsResetOpen(false)}
+                disabled={resetting}
+                className="btn-ghost text-xs py-2 px-4 text-slate-600 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runDemoReset}
+                disabled={resetting}
+                className="text-xs py-2 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <RotateCcw className={`h-4 w-4 ${resetting ? 'animate-spin' : ''}`} />
+                {resetting ? 'Rebuilding…' : 'Reset everything'}
+              </button>
             </div>
           </div>
         </div>
