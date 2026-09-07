@@ -298,7 +298,7 @@ export default function InterviewerProfile() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
         <div className="h-8 w-8 rounded-full border-4 border-brand-600 border-t-transparent animate-spin mx-auto mb-3" />
         <p className="text-xs font-bold text-slate-600">Loading your profile...</p>
       </div>
@@ -320,7 +320,7 @@ export default function InterviewerProfile() {
     .slice(0, 12);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
           <Award className="h-6 w-6 text-brand-600" />

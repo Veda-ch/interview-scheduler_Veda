@@ -51,7 +51,7 @@ export default function CandidatePortal() {
   );
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Top Banner */}
       <div className="card p-6 bg-gradient-to-r from-sky-50 via-white to-sky-50/60 border border-sky-100 shadow-sm mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -199,10 +199,12 @@ export default function CandidatePortal() {
                     </span>
                     {upcomingInterview.isJoinable ? (
                       <a
-                        href={`/meeting/${upcomingInterview.id}`}
+                        href={upcomingInterview.meeting?.joinUrl || `/meeting/${upcomingInterview.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-1.5"
                       >
-                        <Video className="h-4 w-4" /> Enter Interview Room
+                        <Video className="h-4 w-4" /> Join Google Meet
                       </a>
                     ) : (
                       <span

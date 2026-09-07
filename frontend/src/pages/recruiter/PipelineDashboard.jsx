@@ -463,10 +463,13 @@ export default function PipelineDashboard() {
                         <td className="td">
                           {iv.meeting?.joinUrl ? (
                             <a
-                              href={`/meeting/${iv.id}`}
-                              className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg"
+                              href={iv.meeting.joinUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition"
+                              title="Open Google Meet call"
                             >
-                              <Video className="h-3.5 w-3.5 text-purple-600" /> Meeting Room
+                              <Video className="h-3.5 w-3.5 text-emerald-600" /> Google Meet <ExternalLink className="h-3 w-3 text-emerald-500" />
                             </a>
                           ) : (
                             <span className="text-xs text-slate-400">Generated on confirmation</span>

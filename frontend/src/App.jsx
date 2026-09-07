@@ -209,22 +209,24 @@ export default function App() {
 
       {/* Footer */}
       {!isMeetingRoom && !isAuthPage && (
-        <footer className="mt-auto border-t border-purple-200/80 bg-white/80 backdrop-blur-md py-4 px-6 text-xs text-purple-900/70 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-purple-600 shadow-xs shadow-purple-600/50" />
-            <span className="font-bold text-purple-900">Slotify Platform</span>
-            <span>•</span>
-            <span className="flex items-center gap-1 font-medium">
-              <Cpu className="h-3 w-3 text-purple-700" /> Smart Scheduling Engine Active
-            </span>
-          </div>
-          <div className="flex items-center gap-3 font-medium text-purple-800/80">
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-purple-700" />
-              Conflict-Free Scheduling Guard
-            </span>
-            <span>•</span>
-            <span className="font-semibold text-purple-800">Purple & White Theme</span>
+        <footer className="mt-auto border-t border-purple-200/80 bg-white/80 backdrop-blur-md py-4 text-xs text-purple-900/70">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-purple-600 shadow-xs shadow-purple-600/50" />
+              <span className="font-bold text-purple-900">Slotify Platform</span>
+              <span>•</span>
+              <span className="flex items-center gap-1 font-medium">
+                <Cpu className="h-3 w-3 text-purple-700" /> Smart Scheduling Engine Active
+              </span>
+            </div>
+            <div className="flex items-center gap-3 font-medium text-purple-800/80">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-purple-700" />
+                Conflict-Free Scheduling Guard
+              </span>
+              <span>•</span>
+              <span className="font-semibold text-purple-800">Purple & White Theme</span>
+            </div>
           </div>
         </footer>
       )}

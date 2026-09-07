@@ -17,6 +17,7 @@
  */
 import prisma from '../lib/prisma.js';
 import logger from '../lib/logger.js';
+import config from '../config/env.js';
 import { slotTaken, notFound, conflict, badRequest, forbidden } from '../lib/errors.js';
 import { addMinutes, humanSlot, timezoneSpreadHours, localMinuteOfDay } from '../lib/time.js';
 import { parseArray, parseObject, stringifyJson, csvToArray } from '../lib/json.js';
@@ -369,6 +370,9 @@ export async function attachMeetingAndCalendar(interviewId) {
       { email: app.job.recruiter?.user?.email, name: app.job.recruiter?.user?.name },
     ].filter((a) => a.email);
 
+    const shouldRequestConference =
+      config.providers.meeting === 'google_meet' || meetingRow?.provider === 'GOOGLE_MEET';
+
     const { ok, result, error } = await createEventSafely({
       interviewId,
       organizerUserId: app.job.recruiterId ? app.job.recruiter.userId : app.candidate.userId,
@@ -380,8 +384,20 @@ export async function attachMeetingAndCalendar(interviewId) {
       startUtc: interview.startUtc,
       endUtc: interview.endUtc,
       attendees,
-      requestConference: false,
+      requestConference: shouldRequestConference,
     });
+
+    if (ok && result?.hangoutLink && meetingRow) {
+      await prisma.meeting.update({
+        where: { id: meetingRow.id },
+        data: {
+          joinUrl: result.hangoutLink,
+          status: 'ACTIVE',
+          lastError: null,
+        },
+      });
+      meetingRow.joinUrl = result.hangoutLink;
+    }
 
     await prisma.calendarEventRecord.create({
       data: {

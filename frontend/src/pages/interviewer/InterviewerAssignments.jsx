@@ -106,7 +106,7 @@ export default function InterviewerAssignments() {
       : interviews;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Top Banner */}
       <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -475,10 +475,12 @@ export default function InterviewerAssignments() {
                 <div className="flex items-center gap-2 flex-wrap">
                   {canJoin ? (
                     <a
-                      href={`/meeting/${iv.id}`}
+                      href={iv.meeting?.joinUrl || `/meeting/${iv.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="btn-primary text-xs py-2 px-3.5 shadow-xs flex items-center gap-1.5"
                     >
-                      <Video className="h-3.5 w-3.5" /> Join Room
+                      <Video className="h-3.5 w-3.5" /> Join Google Meet
                     </a>
                   ) : !FINISHED.includes(iv.status) ? (
                     <span

@@ -602,8 +602,8 @@ async function main() {
     });
     await prisma.meeting.create({
       data: {
-        interviewId: iv.id, provider: 'JITSI', externalId: `ivs-seed-${iv.id.slice(-8)}`,
-        joinUrl: `https://meet.jit.si/ivs-seed-${iv.id.slice(-8)}`, status: 'ACTIVE',
+        interviewId: iv.id, provider: 'GOOGLE_MEET', externalId: `gmeet-${iv.id.slice(-8)}`,
+        joinUrl: `https://meet.google.com/abc-${iv.id.slice(-4)}-xyz`, status: 'ACTIVE',
       },
     });
     await prisma.calendarEventRecord.create({

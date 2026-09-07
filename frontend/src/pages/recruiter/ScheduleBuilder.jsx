@@ -219,10 +219,12 @@ export default function ScheduleBuilder() {
               </button>
               {successBooking.meeting?.joinUrl && (
                 <a
-                  href={`/meeting/${successBooking.id}`}
-                  className="text-xs font-bold text-purple-700 underline hover:text-purple-900 flex items-center gap-1"
+                  href={successBooking.meeting.joinUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold text-emerald-700 underline hover:text-emerald-900 flex items-center gap-1"
                 >
-                  <Video className="h-3.5 w-3.5 text-purple-600" /> Open Join Room
+                  <Video className="h-3.5 w-3.5 text-emerald-600" /> Open Google Meet Call
                 </a>
               )}
             </div>

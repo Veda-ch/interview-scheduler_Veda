@@ -85,7 +85,7 @@ export default function SlotConfirmation() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Top Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -235,10 +235,12 @@ export default function SlotConfirmation() {
 
                 <div className="flex items-center gap-2">
                   <a
-                    href={`/meeting/${iv.id}`}
+                    href={iv.meeting?.joinUrl || `/meeting/${iv.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
                   >
-                    <Video className="h-3.5 w-3.5" /> Join Room
+                    <Video className="h-3.5 w-3.5" /> Join Google Meet
                   </a>
                   <button
                     onClick={() => setRescheduleInterviewId(iv.id)}

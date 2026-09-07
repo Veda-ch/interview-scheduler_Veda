@@ -16,11 +16,13 @@ router.get('/provider', (_req, res) => {
   const provider = getMeetingProvider();
   res.json({
     provider: provider.name,
-    domain: config.jitsi.domain,
+    domain: provider.name === 'GOOGLE_MEET' ? 'meet.google.com' : provider.name === 'ZOOM' ? 'zoom.us' : config.jitsi.domain,
     embeddable: provider.name === 'JITSI',
     note:
-      provider.name === 'JITSI'
-        ? 'Jitsi rooms are created on first join and need no account or API key.'
+      provider.name === 'GOOGLE_MEET'
+        ? 'Google Meet links open directly in Google Meet.'
+        : provider.name === 'ZOOM'
+        ? 'Zoom meetings open directly in Zoom.'
         : 'This provider opens in a new tab.',
   });
 });

@@ -54,42 +54,49 @@ router.get(
   validateQuery(z.object({ code: z.string().optional(), state: z.string().optional(), error: z.string().optional() })),
   asyncHandler(async (req, res) => {
     const { code, state, error } = req.validatedQuery;
-    if (error) return res.status(400).send(`Calendar connection cancelled: ${error}`);
-    if (!code || !state) throw badRequest('Missing OAuth code or state');
+    if (error) {
+      return res.redirect(`${config.frontendUrl}/calendar?google_error=${encodeURIComponent(error)}`);
+    }
+    if (!code || !state) {
+      return res.redirect(`${config.frontendUrl}/calendar?google_error=${encodeURIComponent('Missing OAuth code or state')}`);
+    }
 
     let parsed;
     try {
       parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
     } catch {
-      throw badRequest('Invalid OAuth state');
+      return res.redirect(`${config.frontendUrl}/calendar?google_error=${encodeURIComponent('Invalid OAuth state')}`);
     }
-    if (!parsed.userId || Date.now() - parsed.ts > 600_000) throw badRequest('OAuth state expired');
+    if (!parsed.userId || Date.now() - parsed.ts > 600_000) {
+      return res.redirect(`${config.frontendUrl}/calendar?google_error=${encodeURIComponent('OAuth state expired. Please try again.')}`);
+    }
 
-    const tokens = await GoogleCalendarProvider.exchangeCode(code);
+    try {
+      const tokens = await GoogleCalendarProvider.exchangeCode(code);
 
-    await prisma.calendarConnection.upsert({
-      where: { userId_provider: { userId: parsed.userId, provider: 'GOOGLE' } },
-      update: {
-        accessToken: encryptSecret(tokens.access_token),
-        ...(tokens.refresh_token ? { refreshToken: encryptSecret(tokens.refresh_token) } : {}),
-        expiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
-        scope: tokens.scope,
-        status: 'CONNECTED',
-      },
-      create: {
-        userId: parsed.userId,
-        provider: 'GOOGLE',
-        accessToken: encryptSecret(tokens.access_token),
-        refreshToken: encryptSecret(tokens.refresh_token),
-        expiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
-        scope: tokens.scope,
-      },
-    });
+      await prisma.calendarConnection.upsert({
+        where: { userId_provider: { userId: parsed.userId, provider: 'GOOGLE' } },
+        update: {
+          accessToken: encryptSecret(tokens.access_token),
+          ...(tokens.refresh_token ? { refreshToken: encryptSecret(tokens.refresh_token) } : {}),
+          expiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
+          scope: tokens.scope,
+          status: 'CONNECTED',
+        },
+        create: {
+          userId: parsed.userId,
+          provider: 'GOOGLE',
+          accessToken: encryptSecret(tokens.access_token),
+          refreshToken: encryptSecret(tokens.refresh_token),
+          expiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
+          scope: tokens.scope,
+        },
+      });
 
-    res.send(
-      '<html><body style="font-family:system-ui;padding:40px"><h2>Calendar connected</h2>' +
-        '<p>You can close this window and return to the scheduler.</p></body></html>'
-    );
+      return res.redirect(`${config.frontendUrl}/calendar?google_connected=true`);
+    } catch (err) {
+      return res.redirect(`${config.frontendUrl}/calendar?google_error=${encodeURIComponent(err.message)}`);
+    }
   })
 );
 

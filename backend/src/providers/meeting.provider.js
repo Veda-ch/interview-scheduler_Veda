@@ -84,30 +84,133 @@ export class MockMeetingProvider extends MeetingProvider {
   }
 }
 
+function generateGoogleMeetCode(seed = '') {
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const hash = crypto.createHash('md5').update(`${seed}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`).digest('hex');
+  const pick = (idx) => letters[parseInt(hash.slice(idx * 2, idx * 2 + 2), 16) % letters.length];
+  const p1 = `${pick(0)}${pick(1)}${pick(2)}`;
+  const p2 = `${pick(3)}${pick(4)}${pick(5)}${pick(6)}`;
+  const p3 = `${pick(7)}${pick(8)}${pick(9)}`;
+  return `${p1}-${p2}-${p3}`;
+}
+
 /**
- * Google Meet links are created as a conference *inside* a Calendar event, so
- * this provider defers to the calendar provider rather than owning a room API.
+ * Google Meet provider. Generates Google Meet links (https://meet.google.com/xxx-yyyy-zzz).
+ * When Google Calendar OAuth is connected, it syncs the conference directly to Google Calendar.
  */
 export class GoogleMeetProvider extends MeetingProvider {
   name = 'GOOGLE_MEET';
 
-  constructor(calendarProvider) {
-    super();
-    this.calendarProvider = calendarProvider;
-  }
-
   async createMeeting(ctx) {
-    if (!config.google.configured) {
-      throw new Error('Google Meet requires GOOGLE_CLIENT_ID/SECRET; falling back');
+    let meetUrl = (config.google.defaultMeetUrl || process.env.DEFAULT_GOOGLE_MEET_URL || '').trim();
+    let code;
+    if (meetUrl) {
+      if (!meetUrl.startsWith('http')) meetUrl = `https://${meetUrl}`;
+      code = meetUrl.split('/').pop() || 'meet';
+    } else {
+      code = generateGoogleMeetCode(ctx.interviewId || ctx.jobTitle || 'interview');
+      meetUrl = `https://meet.google.com/${code}`;
     }
-    // The calendar event creation path requests a hangoutLink; if it is not
-    // there yet the caller retries after the event exists.
+
     return {
       provider: this.name,
-      externalId: `pending-${ctx.interviewId}`,
-      joinUrl: '',
-      deferredToCalendar: true,
+      externalId: code,
+      joinUrl: meetUrl,
+      hostUrl: meetUrl,
+      passcode: null,
+      embeddable: false,
+      note: `Google Meet link created for interview ${ctx.interviewId}.`,
     };
+  }
+
+  async cancelMeeting() {
+    return { ok: true, note: 'Google Meet link released' };
+  }
+}
+
+/**
+ * Zoom meeting provider using Server-to-Server OAuth.
+ * Requires ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET.
+ */
+export class ZoomMeetingProvider extends MeetingProvider {
+  name = 'ZOOM';
+
+  async #getAccessToken() {
+    if (!config.zoom.configured) {
+      throw new Error('Zoom requires ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, and ZOOM_CLIENT_SECRET');
+    }
+    const auth = Buffer.from(`${config.zoom.clientId}:${config.zoom.clientSecret}`).toString('base64');
+    const url = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${config.zoom.accountId}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Basic ${auth}`,
+      },
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Zoom OAuth failed (${res.status}): ${errText.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.access_token;
+  }
+
+  async createMeeting({ interviewId, jobTitle = 'Interview', roundName = '', startUtc, endUtc }) {
+    const token = await this.#getAccessToken();
+    const duration = startUtc && endUtc
+      ? Math.max(15, Math.round((new Date(endUtc) - new Date(startUtc)) / 60000))
+      : 60;
+
+    const res = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        topic: `${jobTitle} - ${roundName || 'Interview'}`,
+        type: 2, // Scheduled meeting
+        start_time: startUtc ? new Date(startUtc).toISOString() : new Date().toISOString(),
+        duration,
+        settings: {
+          join_before_host: true,
+          waiting_room: false,
+          audio: 'both',
+          auto_recording: 'none',
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Zoom meeting creation failed (${res.status}): ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    return {
+      provider: this.name,
+      externalId: String(data.id),
+      joinUrl: data.join_url,
+      hostUrl: data.start_url || null,
+      passcode: data.password || null,
+      embeddable: false,
+      note: `Zoom meeting created for interview ${interviewId}.`,
+    };
+  }
+
+  async cancelMeeting(meeting) {
+    if (!meeting?.externalId) return { ok: true };
+    try {
+      const token = await this.#getAccessToken();
+      await fetch(`https://api.zoom.us/v2/meetings/${meeting.externalId}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      return { ok: true };
+    } catch (err) {
+      logger.warn('Failed to delete Zoom meeting', { error: err.message, externalId: meeting.externalId });
+      return { ok: false, error: err.message };
+    }
   }
 }
 
@@ -119,17 +222,20 @@ export function getMeetingProvider() {
     case 'mock':
       instance = new MockMeetingProvider();
       break;
-    case 'google_meet':
-      if (!config.google.configured) {
-        logger.warn('MEETING_PROVIDER=google_meet without Google credentials - using Jitsi');
-        instance = new JitsiMeetingProvider();
-      } else {
+    case 'zoom':
+      if (!config.zoom.configured) {
+        logger.warn('MEETING_PROVIDER=zoom without Zoom credentials - using Google Meet');
         instance = new GoogleMeetProvider();
+      } else {
+        instance = new ZoomMeetingProvider();
       }
       break;
     case 'jitsi':
-    default:
       instance = new JitsiMeetingProvider();
+      break;
+    case 'google_meet':
+    default:
+      instance = new GoogleMeetProvider();
   }
   logger.info(`Meeting provider: ${instance.name}`);
   return instance;

@@ -24,10 +24,77 @@ export default function CalendarView() {
   // Whose declared availability to paint underneath the interviews.
   const [people, setPeople] = useState([]);
   const [personKey, setPersonKey] = useState('');
+  const [calInfo, setCalInfo] = useState(null);
+  const [calConn, setCalConn] = useState(null);
+  const [connecting, setConnecting] = useState(false);
+  const [oauthBanner, setOauthBanner] = useState(null);
 
   useEffect(() => {
     loadPeople();
+    loadCalendarConnection();
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_connected') === 'true') {
+      setOauthBanner({
+        type: 'success',
+        text: 'Google Calendar successfully connected! Automated Google Meet link creation is active.',
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('google_error')) {
+      setOauthBanner({
+        type: 'error',
+        text: `Google connection failed: ${params.get('google_error')}`,
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
+
+  async function loadCalendarConnection() {
+    try {
+      const [info, conn] = await Promise.all([
+        api.get('/calendar/provider').catch(() => null),
+        api.get('/calendar/connection').catch(() => null),
+      ]);
+      setCalInfo(info);
+      setCalConn(conn);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleConnectGoogle() {
+    setConnecting(true);
+    try {
+      const res = await api.post('/calendar/connect');
+      if (res?.authUrl) {
+        window.location.href = res.authUrl;
+      }
+    } catch (err) {
+      alert(err.message || 'Could not start Google connection');
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnectGoogle() {
+    if (!confirm('Disconnect Google Calendar?')) return;
+    try {
+      await api.delete('/calendar/connection');
+      setCalConn(null);
+      setOauthBanner({ type: 'success', text: 'Google Calendar disconnected.' });
+    } catch (err) {
+      alert(err.message || 'Could not disconnect');
+    }
+  }
+
+  async function handleReconnectGoogle() {
+    try {
+      await api.delete('/calendar/connection').catch(() => null);
+      setCalConn(null);
+      await handleConnectGoogle();
+    } catch (err) {
+      alert(err.message || 'Could not reconnect');
+    }
+  }
 
   useEffect(() => {
     loadCalendarData();
@@ -134,6 +201,31 @@ export default function CalendarView() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+      {oauthBanner && (
+        <div
+          className={`mb-5 p-4 rounded-xl text-xs font-semibold flex items-center justify-between border shadow-sm ${
+            oauthBanner.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {oauthBanner.type === 'success' ? (
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+            ) : (
+              <Info className="h-4 w-4 text-rose-600 shrink-0" />
+            )}
+            <span>{oauthBanner.text}</span>
+          </div>
+          <button
+            onClick={() => setOauthBanner(null)}
+            className="text-slate-400 hover:text-slate-700 text-sm font-bold ml-3"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="card p-6 bg-gradient-to-r from-purple-50 via-white to-sky-50/50 border border-sky-100 shadow-sm mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -167,6 +259,38 @@ export default function CalendarView() {
                 </optgroup>
               ))}
             </select>
+            {calConn?.connected ? (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  Google Calendar Synced
+                </span>
+                <button
+                  onClick={handleReconnectGoogle}
+                  className="btn-secondary text-[11px] py-1.5 px-2.5 font-semibold text-purple-800 hover:bg-purple-100"
+                  title="Reconnect to grant full calendar permissions"
+                >
+                  Reconnect
+                </button>
+                <button
+                  onClick={handleDisconnectGoogle}
+                  className="btn-ghost text-[11px] py-1.5 px-2 text-rose-600 hover:bg-rose-50"
+                  title="Disconnect Google Calendar"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : calInfo?.canConnect ? (
+              <button
+                onClick={handleConnectGoogle}
+                disabled={connecting}
+                className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 font-bold border-purple-300 text-purple-800 hover:bg-purple-100/70"
+                title="Connect your Google Calendar account for automated Google Meet link generation"
+              >
+                <Video className="h-3.5 w-3.5 text-purple-700" />
+                {connecting ? 'Connecting...' : 'Connect Google Calendar'}
+              </button>
+            ) : null}
             <button
               onClick={loadCalendarData}
               className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 font-bold"
@@ -281,10 +405,12 @@ export default function CalendarView() {
               {selectedEvent.extendedProps.joinUrl && (
                 <div className="pt-2">
                   <a
-                    href={`/meeting/${selectedEvent.id}`}
+                    href={selectedEvent.extendedProps.joinUrl || `/meeting/${selectedEvent.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-primary w-full text-xs py-2.5 flex items-center justify-center gap-2 font-bold shadow-sm"
                   >
-                    <Video className="h-4 w-4" /> Enter Virtual Meeting Room
+                    <Video className="h-4 w-4" /> Open Google Meet Call
                   </a>
                 </div>
               )}
