@@ -54,10 +54,6 @@ export default function VirtualRoom() {
     }
   }
 
-  const isJitsi =
-    meeting?.provider === 'JITSI' ||
-    (meeting?.joinUrl && meeting.joinUrl.includes('jit.si'));
-
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col">
       {/* Top Bar in Meeting Room */}
@@ -97,10 +93,10 @@ export default function VirtualRoom() {
               href={meeting.joinUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition shadow-sm"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              Open in External Tab
+              Join Google Meet
             </a>
           )}
         </div>
@@ -110,8 +106,8 @@ export default function VirtualRoom() {
       <main className="flex-1 relative flex items-center justify-center p-4 bg-slate-950">
         {loading && (
           <div className="text-center">
-            <div className="h-12 w-12 rounded-full border-4 border-brand-500 border-t-transparent animate-spin mx-auto mb-3" />
-            <p className="text-sm text-slate-400 font-medium">Connecting to virtual room...</p>
+            <div className="h-12 w-12 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin mx-auto mb-3" />
+            <p className="text-sm text-slate-400 font-medium">Connecting to meeting room...</p>
           </div>
         )}
 
@@ -130,35 +126,35 @@ export default function VirtualRoom() {
         )}
 
         {!loading && !error && meeting && (
-          <div className="w-full h-full max-w-6xl max-h-[85vh] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-slate-900 relative">
-            {isJitsi ? (
-              <iframe
-                src={`${meeting.joinUrl}#config.prejoinPageEnabled=false&interfaceConfig.TOOLBAR_BUTTONS=['microphone','camera','closedcaptions','desktop','embedmeeting','fullscreen','fodeviceselection','hangup','profile','chat','recording','livestreaming','etherpad','sharedvideo','settings','raisehand','videoquality','filmstrip','invite','feedback','stats','shortcuts','tileview','videobackgroundblur','download','help','mute-everyone']`}
-                allow="camera; microphone; fullscreen; display-capture; autoplay"
-                className="w-full h-full border-0"
-                title="Interview Virtual Room"
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <div className="h-16 w-16 rounded-3xl bg-brand-600/20 text-brand-400 flex items-center justify-center mb-4">
-                  <Video className="h-8 w-8" />
-                </div>
-                <h3 className="text-lg font-bold text-white">
-                  {meeting.provider || 'Virtual'} Conference Ready
-                </h3>
-                <p className="text-xs text-slate-400 max-w-md mt-1 mb-6">
-                  Click below to open your secure video call link with the panel.
-                </p>
-                <a
-                  href={meeting.joinUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-primary py-2.5 px-6 text-sm flex items-center gap-2"
-                >
-                  Launch {meeting.provider || 'Meeting'} Call <ExternalLink className="h-4 w-4" />
-                </a>
-              </div>
-            )}
+          <div className="w-full h-full max-w-4xl max-h-[75vh] rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-slate-900/90 flex flex-col items-center justify-center text-center p-8">
+            <div className="h-20 w-20 rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mb-5 shadow-lg shadow-emerald-500/10">
+              <Video className="h-10 w-10" />
+            </div>
+            <h3 className="text-2xl font-black text-white">
+              Google Meet Session Ready
+            </h3>
+            <p className="text-sm text-slate-400 max-w-md mt-2 mb-4">
+              Your official video conference room has been generated. Click below to join the call with your interview panel.
+            </p>
+
+            <div className="bg-slate-950/60 border border-white/10 rounded-xl px-4 py-2.5 max-w-md w-full mb-6 flex items-center justify-between gap-3 text-xs font-mono text-emerald-400">
+              <span className="truncate">{meeting.joinUrl}</span>
+              <button
+                onClick={copyJoinUrl}
+                className="text-xs font-bold text-slate-400 hover:text-white shrink-0 px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+
+            <a
+              href={meeting.joinUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-extrabold text-sm text-white flex items-center gap-2.5 shadow-lg shadow-emerald-600/30 transition hover:scale-105"
+            >
+              <Video className="h-5 w-5" /> Launch Google Meet Call <ExternalLink className="h-4 w-4" />
+            </a>
           </div>
         )}
       </main>

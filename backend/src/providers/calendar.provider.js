@@ -97,8 +97,8 @@ export class GoogleCalendarProvider extends CalendarProvider {
       redirect_uri: config.google.redirectUri,
       response_type: 'code',
       access_type: 'offline',
-      prompt: 'consent',
-      scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
+      prompt: 'consent select_account',
+      scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
       state,
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;

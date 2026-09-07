@@ -85,7 +85,7 @@ export default function SlotConfirmation() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Top Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -149,13 +149,19 @@ export default function SlotConfirmation() {
               >
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <span
-                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                    className={`text-xs font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
                       isRank1
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 text-slate-700'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700'
                     }`}
                   >
-                    {isRank1 ? '★ Recommended Slot' : `Option #${prop.rank || idx + 1}`}
+                    {isRank1 ? (
+                      <>
+                        <Sparkles className="h-3 w-3" /> Recommended Slot
+                      </>
+                    ) : (
+                      `Option #${prop.rank || idx + 1}`
+                    )}
                   </span>
                   <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                     Match {Math.round(prop.score || 90)}%
@@ -235,10 +241,12 @@ export default function SlotConfirmation() {
 
                 <div className="flex items-center gap-2">
                   <a
-                    href={`/meeting/${iv.id}`}
+                    href={iv.meeting?.joinUrl || `/meeting/${iv.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
                   >
-                    <Video className="h-3.5 w-3.5" /> Join Room
+                    <Video className="h-3.5 w-3.5" /> Join Google Meet
                   </a>
                   <button
                     onClick={() => setRescheduleInterviewId(iv.id)}

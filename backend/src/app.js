@@ -142,6 +142,11 @@ export function createApp() {
     const dist = path.join(config.repoRoot, 'frontend', 'dist');
     app.use(express.static(dist));
     app.get(/^\/(?!api|uploads).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  } else {
+    // In development, redirect direct page hits on port 4000 (e.g. /calendar) to the Vite dev server
+    app.get(/^\/(?!api|uploads).*/, (req, res) => {
+      res.redirect(`${config.frontendUrl}${req.originalUrl}`);
+    });
   }
 
   app.use(notFoundHandler);

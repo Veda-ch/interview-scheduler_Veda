@@ -227,7 +227,7 @@ export default function CandidateProfile() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
         <div className="h-10 w-10 rounded-full border-4 border-brand-600 border-t-transparent animate-spin mx-auto mb-3" />
         <p className="text-xs font-bold text-slate-600">Loading your profile...</p>
       </div>
@@ -235,7 +235,7 @@ export default function CandidateProfile() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       {/* Top Hero Banner */}
       <div className="card p-6 bg-gradient-to-r from-emerald-50 via-white to-sky-50/70 border border-sky-100 shadow-sm mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">

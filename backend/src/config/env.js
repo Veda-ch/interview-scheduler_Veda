@@ -80,7 +80,7 @@ export const config = {
 
   providers: {
     calendar: (process.env.CALENDAR_PROVIDER || 'mock').toLowerCase(),
-    meeting: (process.env.MEETING_PROVIDER || 'jitsi').toLowerCase(),
+    meeting: (process.env.MEETING_PROVIDER || 'google_meet').toLowerCase(),
     notification: (process.env.NOTIFICATION_PROVIDER || 'mock').toLowerCase(),
     ai: (process.env.AI_PROVIDER || 'mock').toLowerCase(),
   },
@@ -91,12 +91,22 @@ export const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/calendar/oauth/callback',
     loginRedirectUri: process.env.GOOGLE_LOGIN_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback',
+    defaultMeetUrl: process.env.DEFAULT_GOOGLE_MEET_URL || '',
     get configured() {
       return Boolean(this.clientId && this.clientSecret);
     },
   },
 
   jitsi: { domain: process.env.JITSI_DOMAIN || 'meet.jit.si' },
+
+  zoom: {
+    accountId: process.env.ZOOM_ACCOUNT_ID || '',
+    clientId: process.env.ZOOM_CLIENT_ID || '',
+    clientSecret: process.env.ZOOM_CLIENT_SECRET || '',
+    get configured() {
+      return Boolean(this.accountId && this.clientId && this.clientSecret);
+    },
+  },
 
   smtp: {
     host: process.env.SMTP_HOST || '',

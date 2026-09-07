@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, DEMO_PERSONAS } from '../../context/AuthContext.jsx';
-import { api } from '../../lib/api.js';
 import {
   Compass,
   Briefcase,
@@ -17,10 +16,7 @@ import {
   Building,
   KeyRound,
   Sparkles,
-  Info,
   ShieldCheck,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 
 const ROLES = [
@@ -77,28 +73,14 @@ export default function LoginPage() {
   // UI status
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [googleStatus, setGoogleStatus] = useState({ configured: false, checked: false });
-  const [showConfigHelp, setShowConfigHelp] = useState(false);
 
-  // Check URL errors (e.g. redirected back from Google callback error)
+  // Check URL errors
   useEffect(() => {
     const err = searchParams.get('error');
     if (err) {
       setErrorMsg(decodeURIComponent(err));
     }
   }, [searchParams]);
-
-  // Check server Google OAuth readiness
-  useEffect(() => {
-    api
-      .get('/auth/status')
-      .then((data) => {
-        setGoogleStatus({ configured: Boolean(data?.googleConfigured), checked: true });
-      })
-      .catch(() => {
-        setGoogleStatus({ configured: false, checked: true });
-      });
-  }, []);
 
   function handleRoleSelect(roleId) {
     setSelectedRole(roleId);
@@ -165,11 +147,6 @@ export default function LoginPage() {
     }
   }
 
-  function handleGoogleLogin() {
-    const roleParam = selectedRole || 'CANDIDATE';
-    // Direct browser redirect to backend Google OAuth initiation
-    window.location.href = `http://localhost:4000/api/auth/google?role=${roleParam}`;
-  }
 
   async function handleDemoShortcut(roleKey) {
     setErrorMsg('');
@@ -237,7 +214,7 @@ export default function LoginPage() {
                   Select Your Workspace Role
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                  First choose how you will use the platform, then sign in with your email or Google account.
+                  First choose how you will use the platform, then sign in with your email credentials.
                 </p>
               </div>
 
@@ -357,81 +334,7 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* METHOD 1: GOOGLE OAUTH 2.0 */}
-              <div className="mb-5">
-                <button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm shadow-xs hover:shadow transition"
-                >
-                  {/* Official Google G SVG */}
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                  <span>Continue with Google</span>
-                </button>
-
-                {/* Google Configuration Status Note */}
-                <div className="mt-2 text-center">
-                  {!googleStatus.configured && googleStatus.checked && (
-                    <div className="text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200 rounded-lg p-2 mt-2">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <Info className="h-3.5 w-3.5 text-amber-600" />
-                          Google OAuth setup instructions
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowConfigHelp(!showConfigHelp)}
-                          className="text-amber-800 underline font-bold text-[10px] flex items-center gap-0.5"
-                        >
-                          {showConfigHelp ? 'Hide' : 'How to configure'}
-                          {showConfigHelp ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        </button>
-                      </div>
-                      {showConfigHelp && (
-                        <div className="text-left mt-2 pt-2 border-t border-amber-200 text-slate-600 text-[11px] space-y-1">
-                          <p>To enable real Google sign-in:</p>
-                          <ol className="list-decimal list-inside pl-1 space-y-0.5 font-mono text-[10px]">
-                            <li>Create credentials in Google Cloud Console (OAuth 2.0 Client ID)</li>
-                            <li>Set Authorized redirect URI to: <code className="bg-amber-100 px-1 py-0.5 rounded text-slate-900">http://localhost:4000/api/auth/google/callback</code></li>
-                            <li>Add <code className="bg-amber-100 px-1 py-0.5 rounded text-slate-900">GOOGLE_CLIENT_ID</code> and <code className="bg-amber-100 px-1 py-0.5 rounded text-slate-900">GOOGLE_CLIENT_SECRET</code> to your <code className="bg-amber-100 px-1 py-0.5 rounded text-slate-900">.env</code></li>
-                          </ol>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DIVIDER */}
-              <div className="relative my-5">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-3 font-bold text-slate-400">
-                    Or continue with email
-                  </span>
-                </div>
-              </div>
-
-              {/* METHOD 2: EMAIL + PASSWORD FORM */}
+              {/* EMAIL + PASSWORD FORM */}
               <form onSubmit={handleEmailAuth} className="space-y-4">
                 {authMode === 'register' && (
                   <div>
