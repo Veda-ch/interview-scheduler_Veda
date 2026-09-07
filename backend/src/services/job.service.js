@@ -40,11 +40,16 @@ export function shapeJob(row) {
  * skills the recruiter never asked for. Those skills are what interviewers are
  * matched against, so they stay exactly as entered.
  */
-const toWindowDates = (data) => ({
-  ...data,
-  ...(data.interviewWindowStart ? { interviewWindowStart: new Date(data.interviewWindowStart) } : {}),
-  ...(data.interviewWindowEnd ? { interviewWindowEnd: new Date(data.interviewWindowEnd) } : {}),
-});
+const toWindowDates = (data) => {
+  const result = { ...data };
+  if ('interviewWindowStart' in data) {
+    result.interviewWindowStart = data.interviewWindowStart ? new Date(data.interviewWindowStart) : null;
+  }
+  if ('interviewWindowEnd' in data) {
+    result.interviewWindowEnd = data.interviewWindowEnd ? new Date(data.interviewWindowEnd) : null;
+  }
+  return result;
+};
 
 export async function createJob({ recruiterId, requiredSkills, ...data }) {
   const skills = requiredSkills || [];

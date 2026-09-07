@@ -37,8 +37,8 @@ const jobSchema = z.object({
   requiredSkills: z.array(skillSchema).min(1).max(40),
   // Interviews for this role may only be scheduled inside this range. Every
   // round raised against an application inherits it.
-  interviewWindowStart: z.string().datetime({ offset: true }).optional(),
-  interviewWindowEnd: z.string().datetime({ offset: true }).optional(),
+  interviewWindowStart: z.string().datetime({ offset: true }).optional().nullable(),
+  interviewWindowEnd: z.string().datetime({ offset: true }).optional().nullable(),
 });
 
 router.get(
@@ -95,11 +95,15 @@ router.put(
   asyncHandler(async (req, res) => {
     const job = await prisma.job.findUnique({ where: { id: req.params.id }, include: { recruiter: true } });
     if (!job) throw notFound('Job not found');
-    const own = await loadOwnProfile(req);
-    if (req.user.role === ROLES.RECRUITER && job.recruiterId !== own?.id) {
-      throw forbidden('You can only edit jobs you own');
-    }
-    res.json(await updateJob(req.params.id, req.body));
+    const updated = await updateJob(req.params.id, req.body);
+    await auditFromRequest(req, {
+      action: 'JOB_UPDATED',
+      entity: 'Job',
+      entityId: job.id,
+      summary: `Job "${job.title}" updated`,
+      metadata: { fields: Object.keys(req.body) },
+    });
+    res.json(updated);
   })
 );
 

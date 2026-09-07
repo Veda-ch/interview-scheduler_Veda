@@ -30,10 +30,12 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [existingRequests, setExistingRequests] = useState([]);
 
   // Form State
   const [applicationId, setApplicationId] = useState('');
-  const [roundName, setRoundName] = useState('Technical Round 1');
+  const [roundNumber, setRoundNumber] = useState(1);
+  const [roundName, setRoundName] = useState('Round 1');
   const [interviewType, setInterviewType] = useState('TECHNICAL');
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [requiredInterviewerCount, setRequiredInterviewerCount] = useState(1);
@@ -55,14 +57,41 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
     }
   }, [isOpen, initialApplicationId]);
 
+  function applyAppSelection(appId, appList = applications, reqList = existingRequests) {
+    const selected = appList.find((a) => a.id === appId);
+    if (selected && selected.skills?.length) {
+      setSkills(
+        selected.skills.slice(0, 4).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
+      );
+    }
+
+    // Determine the next unused round number for this candidate
+    const appRequests = (reqList || []).filter(
+      (r) =>
+        (r.applicationId === appId || r.application?.id === appId) &&
+        ['PENDING', 'PROPOSED', 'SCHEDULED'].includes(r.status)
+    );
+    const used = appRequests.map((r) => r.roundNumber);
+    let nextNum = 1;
+    while (used.includes(nextNum)) {
+      nextNum++;
+    }
+    setRoundNumber(nextNum);
+    setRoundName(`Round ${nextNum}`);
+  }
+
   async function loadApplications() {
     setLoading(true);
     try {
-      const [res, jobList] = await Promise.all([
+      const [res, jobList, reqs] = await Promise.all([
         api.get('/candidates?take=50'),
         api.get('/jobs').catch(() => []),
+        api.get('/interview-requests').catch(() => []),
       ]);
       setJobs(jobList || []);
+      const reqList = reqs || [];
+      setExistingRequests(reqList);
+
       const candidateList = res?.items || res || [];
       const apps = [];
       for (const c of candidateList) {
@@ -86,12 +115,7 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
       const targetId = initialApplicationId || (apps.length > 0 ? apps[0].id : '');
       if (targetId) {
         setApplicationId(targetId);
-        const selected = apps.find((a) => a.id === targetId);
-        if (selected && selected.skills?.length) {
-          setSkills(
-            selected.skills.slice(0, 4).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
-          );
-        }
+        applyAppSelection(targetId, apps, reqList);
       }
     } catch (err) {
       console.error('Failed to load applications:', err);
@@ -104,18 +128,35 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
   const selectedJob = jobs.find((j) => j.id === selectedApp?.jobId);
   const jobWindow =
     selectedJob?.interviewWindowStart && selectedJob?.interviewWindowEnd
-      ? `${DateTime.fromISO(selectedJob.interviewWindowStart).toFormat('LLL dd')} – ${DateTime.fromISO(
-          selectedJob.interviewWindowEnd
+      ? `${DateTime.fromISO(selectedJob.interviewWindowStart, { zone: 'utc' }).toFormat('LLL dd')} – ${DateTime.fromISO(
+          selectedJob.interviewWindowEnd,
+          { zone: 'utc' }
         ).toFormat('LLL dd, yyyy')}`
       : null;
 
+  const activeRoundsForSelectedApp = existingRequests
+    .filter(
+      (r) =>
+        (r.applicationId === applicationId || r.application?.id === applicationId) &&
+        ['PENDING', 'PROPOSED', 'SCHEDULED'].includes(r.status)
+    )
+    .map((r) => r.roundNumber);
+
+  const isDuplicateRound = activeRoundsForSelectedApp.includes(Number(roundNumber));
+
   function handleApplicationChange(appId) {
     setApplicationId(appId);
-    const selected = applications.find((a) => a.id === appId);
-    if (selected && selected.skills?.length) {
-      setSkills(
-        selected.skills.slice(0, 4).map((s) => ({ name: s, weight: 0.8, mustHave: true }))
-      );
+    applyAppSelection(appId, applications, existingRequests);
+  }
+
+  function handleRoundNameChange(val) {
+    setRoundName(val);
+    const match = val.match(/\d+/);
+    if (match) {
+      const num = parseInt(match[0], 10);
+      if (num >= 1 && num <= 12) {
+        setRoundNumber(num);
+      }
     }
   }
 
@@ -142,15 +183,20 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
       return;
     }
 
+    let finalRoundNumber = Number(roundNumber);
+    if (!finalRoundNumber || isNaN(finalRoundNumber) || finalRoundNumber < 1) {
+      const match = roundName.match(/\d+/);
+      finalRoundNumber = match ? parseInt(match[0], 10) : 1;
+    }
+
     setSubmitting(true);
     setError(null);
-
 
     try {
       const payload = {
         applicationId,
-        roundNumber: roundName.includes('2') ? 2 : roundName.includes('3') ? 3 : 1,
-        roundName,
+        roundNumber: finalRoundNumber,
+        roundName: roundName.trim(),
         interviewType,
         durationMinutes: Number(durationMinutes),
         requiredInterviewerCount: Number(requiredInterviewerCount),
@@ -222,35 +268,65 @@ export default function RequestModal({ isOpen, onClose, onSuccess, initialApplic
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Round Name */}
-            <div>
-              <label className="label">Round Name *</label>
-              <input
-                type="text"
-                value={roundName}
-                onChange={(e) => setRoundName(e.target.value)}
-                className="input font-medium"
-                placeholder="e.g. Technical Round 1"
-                required
-              />
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+              {/* Round Number */}
+              <div className="sm:col-span-3">
+                <label className="label">Round # *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={roundNumber}
+                  onChange={(e) => {
+                    const num = parseInt(e.target.value, 10) || 1;
+                    setRoundNumber(num);
+                    if (roundName.startsWith('Round ') || roundName.startsWith('Technical Round ')) {
+                      const prefix = roundName.startsWith('Round ') ? 'Round ' : 'Technical Round ';
+                      setRoundName(`${prefix}${num}`);
+                    }
+                  }}
+                  className={`input font-semibold ${isDuplicateRound ? 'border-amber-400 bg-amber-50/40 text-amber-900' : ''}`}
+                  required
+                />
+              </div>
+
+              {/* Round Name */}
+              <div className="sm:col-span-5">
+                <label className="label">Round Name *</label>
+                <input
+                  type="text"
+                  value={roundName}
+                  onChange={(e) => handleRoundNameChange(e.target.value)}
+                  className="input font-medium"
+                  placeholder="e.g. Technical Round 1"
+                  required
+                />
+              </div>
+
+              {/* Interview Type */}
+              <div className="sm:col-span-4">
+                <label className="label">Interview Round Type *</label>
+                <select
+                  value={interviewType}
+                  onChange={(e) => setInterviewType(e.target.value)}
+                  className="input cursor-pointer font-medium"
+                >
+                  {INTERVIEW_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Interview Type */}
-            <div>
-              <label className="label">Interview Round Type *</label>
-              <select
-                value={interviewType}
-                onChange={(e) => setInterviewType(e.target.value)}
-                className="input cursor-pointer font-medium"
-              >
-                {INTERVIEW_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {isDuplicateRound && (
+              <p className="text-[11px] font-medium text-amber-700 mt-2 flex items-center gap-1.5 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                Round {roundNumber} already exists for this candidate (Active rounds: {activeRoundsForSelectedApp.sort((a, b) => a - b).join(', ')}).
+              </p>
+            )}
           </div>
 
           {/* Duration, Buffer & Panel Size */}

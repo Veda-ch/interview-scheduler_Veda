@@ -11,8 +11,8 @@ import { DateTime } from 'luxon';
  * are matched against, and the date window every round for the role inherits.
  */
 const iso = (d, endOfDay = false) =>
-  d ? DateTime.fromISO(d)[endOfDay ? 'endOf' : 'startOf']('day').toUTC().toISO() : null;
-const toDateInput = (v) => (v ? DateTime.fromISO(v).toISODate() : '');
+  d ? DateTime.fromISO(d, { zone: 'utc' })[endOfDay ? 'endOf' : 'startOf']('day').toISO() : null;
+const toDateInput = (v) => (v ? DateTime.fromISO(v, { zone: 'utc' }).toISODate() : '');
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState([]);
@@ -88,8 +88,12 @@ export default function JobsPage() {
       setError('Add at least one required skill - this is what interviewers are matched against.');
       return;
     }
-    if (DateTime.fromISO(windowEnd) <= DateTime.fromISO(windowStart)) {
-      setError('The interview window must end after it starts.');
+    if (!windowStart || !windowEnd) {
+      setError('Please provide both a start date and an end date for the interview window.');
+      return;
+    }
+    if (DateTime.fromISO(windowEnd) < DateTime.fromISO(windowStart)) {
+      setError('The interview window must end on or after it starts.');
       return;
     }
     setCreating(true);
@@ -121,8 +125,12 @@ export default function JobsPage() {
   }
 
   async function saveWindow(jobId) {
-    if (DateTime.fromISO(editEnd) <= DateTime.fromISO(editStart)) {
-      setError('The interview window must end after it starts.');
+    if (!editStart || !editEnd) {
+      setError('Please provide both a start date and an end date.');
+      return;
+    }
+    if (DateTime.fromISO(editEnd) < DateTime.fromISO(editStart)) {
+      setError('The interview window must end on or after it starts.');
       return;
     }
     setSavingWindow(true);
@@ -393,8 +401,14 @@ export default function JobsPage() {
                         <CalendarRange className="h-3.5 w-3.5 text-indigo-600" /> Interview Window
                       </span>
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="input text-xs py-1.5 rounded-md" />
-                        <input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="input text-xs py-1.5 rounded-md" />
+                        <div>
+                          <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Earliest Date</label>
+                          <input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="input text-xs py-1.5 rounded-md w-full" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Latest Date</label>
+                          <input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="input text-xs py-1.5 rounded-md w-full" />
+                        </div>
                       </div>
                       <div className="flex justify-end gap-2 pt-1">
                         <button onClick={() => setEditingId(null)} className="px-3 py-1 rounded-md border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition">
@@ -415,8 +429,8 @@ export default function JobsPage() {
                         <CalendarRange className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
                         {hasWindow ? (
                           <span className="text-gray-700 font-medium truncate">
-                            {DateTime.fromISO(job.interviewWindowStart).toFormat('LLL dd')} –{' '}
-                            {DateTime.fromISO(job.interviewWindowEnd).toFormat('LLL dd, yyyy')}
+                            {DateTime.fromISO(job.interviewWindowStart, { zone: 'utc' }).toFormat('LLL dd')} –{' '}
+                            {DateTime.fromISO(job.interviewWindowEnd, { zone: 'utc' }).toFormat('LLL dd, yyyy')}
                           </span>
                         ) : (
                           <span className="text-amber-700 font-semibold">
